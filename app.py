@@ -478,6 +478,74 @@ def delete_hotspot_profile():
             
     return redirect(url_for('hotspot_profile_list'))
 
+@app.route('/hotspot/profile/edit', methods=['GET', 'POST'])
+@login_required
+@router_connected_required
+def edit_hotspot_profile():
+
+    # POST: simpan perubahan ke MikroTik
+    if request.method == 'POST':
+        profile_id   = request.form.get('id')
+        name         = request.form.get('name')
+        pool         = request.form.get('address_pool')
+        shared_users = request.form.get('shared_users')
+        rate_limit   = request.form.get('rate_limit')
+        parent_queue = request.form.get('parent_queue')
+
+        api, connection = get_mikrotik_api()
+        if api:
+            try:
+                update_data = {'.id': profile_id, 'name': name}
+                update_data['address-pool'] = pool         if pool         and pool         != 'none' else 'none'
+                update_data['parent-queue'] = parent_queue if parent_queue and parent_queue != 'none' else 'none'
+                update_data['rate-limit']   = rate_limit   if rate_limit   else ''
+                if shared_users:
+                    update_data['shared-users'] = shared_users
+
+                api.get_resource('/ip/hotspot/user/profile').set(**update_data)
+                flash(f"Profile '{name}' berhasil diperbarui!", 'success')
+                return redirect(url_for('hotspot_profile_list'))
+            except Exception as e:
+                flash(f'Gagal memperbarui profile: {e}', 'danger')
+            finally:
+                connection.disconnect()
+        else:
+            flash('Koneksi ke router gagal.', 'danger')
+        return redirect(url_for('hotspot_profile_list'))
+
+    # GET: ambil data profile lalu tampilkan form edit
+    profile_id = request.args.get('id')
+    if not profile_id:
+        flash('ID profile tidak ditemukan.', 'danger')
+        return redirect(url_for('hotspot_profile_list'))
+
+    profile = None
+    pools   = []
+    queues  = []
+
+    api, connection = get_mikrotik_api()
+    if api:
+        try:
+            all_profiles = api.get_resource('/ip/hotspot/user/profile').get()
+            for p in all_profiles:
+                pid = p.get('.id') or p.get('id') or ''
+                if pid == profile_id:
+                    p['.id'] = pid
+                    profile = p
+                    break
+            pools  = api.get_resource('/ip/pool').get()
+            queues = api.get_resource('/queue/simple').get()
+        except Exception as e:
+            flash(f'Gagal memuat data profile: {e}', 'danger')
+        finally:
+            connection.disconnect()
+
+    if not profile:
+        flash('Profile tidak ditemukan.', 'danger')
+        return redirect(url_for('hotspot_profile_list'))
+
+    return render_template('hotspot_profile_edit.html', profile=profile, pools=pools, queues=queues)
+
 # ==========================================
 # HOTSPOT ACTIVE
 # ==========================================
