@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+{% block title %}User List Hotspot - EINSTEIN{% endblock %}
+{% block content %}
+
+    <div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-1">Hotspot User List</h2>
+            <p class="text-sm text-gray-500">Kelola dan pantau semua akun pengguna jaringan hotspot MikroTik.</p>
+        </div>
+    </div>
+
+    <div class="bg-white p-3 rounded-xl border border-gray-100 shadow-sm mb-6 flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
+        
+        <div class="relative flex-1">
+            <input type="text" id="searchFilter" placeholder="Search" 
+                class="w-full bg-white text-gray-900 placeholder-gray-400 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent py-2 px-3 transition">
+        </div>
+        
+        <div class="w-full sm:w-48">
+            <select id="profileFilter" 
+                    class="w-full bg-white text-gray-700 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent py-2 px-3 transition cursor-pointer">
+                <option value="">Semua Profile</option>
+                
+                {% for profile_name in profiles %}
+                    <option value="{{ profile_name }}">{{ profile_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="w-full sm:w-48">
+            <select id="commentFilter" 
+                    class="w-full bg-white text-gray-700 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent py-2 px-3 transition cursor-pointer">
+                <option value="">Semua Comment</option>
+                
+                {% for comment in comments %}
+                    <option value="{{ comment }}">{{ comment }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button type="button" onclick="printVouchers()" 
+                class="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white text-sm font-medium py-2 px-4 rounded-lg flex items-center justify-center shadow-sm transition active:scale-95 duration-150 whitespace-nowrap">
+            <i data-lucide="printer" class="w-4 h-4 mr-2"></i> Print
+        </button>
+    </div>
+
+    <div class="bg-white px-4 py-3 text-xs text-gray-500">
+        Total Pengguna: <span class="font-semibold text-gray-700">{{ users | length | default('0') }}</span> Item
+    </div>
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse" id="userTable">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        <th class="py-3 px-4">Server</th>
+                        <th class="py-3 px-4">Name</th>
+                        <th class="py-3 px-4">Profile</th>
+                        <th class="py-3 px-4">Mac Address</th>
+                        <th class="py-3 px-4">Uptime</th>
+                        <th class="py-3 px-4">Bytes In</th>
+                        <th class="py-3 px-4">Bytes Out</th>
+                        <th class="py-3 px-4">Comment</th>
+                        <th class="py-3 px-4 text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50 text-sm text-gray-700">
+                    {% for user in users %}
+                    <tr class="hover:bg-gray-50/70 transition-colors">
+                        <td class="py-3 px-4 text-gray-500 font-medium">{{ user.server | default('all') }}</td>
+                        <td class="py-3 px-4 font-bold text-gray-900">{{ user.name }}</td>
+                        <td class="py-3 px-4">
+                            <span class="px-2 py-0.5 bg-amber-50 text-amber-700 font-medium rounded text-xs border border-amber-100">
+                                {{ user.profile }}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-gray-500 font-mono text-xs">{{ user['mac-address'] | default('-') }}</td>
+                        <td class="py-3 px-4 text-gray-600">{{ user.uptime | default('0s') }}</td>
+                        <td class="py-3 px-4 text-gray-600">{{ user['bytes-in-formatted'] | default('0 B') }}</td>
+                        <td class="py-3 px-4 text-gray-600">{{ user['bytes-out-formatted'] | default('0 B') }}</td>
+                        <td class="py-3 px-4 text-gray-400 max-w-[150px] truncate" title="{{ user.comment | default('') }}">
+                            {{ user.comment | default('-') }}
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            <button type="button" 
+                                    data-id="{{ user.get('.id') or user.get('id') }}" 
+                                    data-name="{{ user.name }}"
+                                    onclick="openDeleteModal(this.getAttribute('data-id'), this.getAttribute('data-name'))"
+                                    class="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors" title="Hapus User">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="py-12 text-center text-gray-400">
+                            <div class="flex flex-col items-center justify-center space-y-2">
+                                <i data-lucide="users" class="w-8 h-8 text-gray-300"></i>
+                                <span class="text-sm">Belum ada data user hotspot terdeteksi.</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+    </div>
+
+    <div id="deleteModal" class="hidden fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl border border-gray-100 max-w-sm w-full p-5 transform scale-100 transition-transform">
+            <div class="flex items-center space-x-3 text-red-600 mb-3">
+                <div class="p-2 bg-red-50 rounded-full">
+                    <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800">Hapus Hotspot User</h3>
+            </div>
+            
+            <p id="deleteMessage" class="text-sm text-gray-600 mb-5 leading-relaxed">
+                Apakah Anda yakin ingin menghapus user ini?
+            </p>
+            
+            <form action="#" method="POST" id="deleteForm" class="flex justify-end space-x-2">
+                <input type="hidden" name="id" id="deleteUserId">
+                <button type="button" onclick="closeDeleteModal()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition">
+                    Batal
+                </button>
+                <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition shadow-sm">
+                    Ya, Hapus
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // EVENT LISTENER UNTUK FILTER PROFILE
+        document.getElementById('profileFilter').addEventListener('change', function() {
+            // Ambil nilai profile yang dipilih dari dropdown (jadikan huruf kecil semua agar cocok saat dibandingan)
+            let selectedProfile = this.value.toLowerCase().trim();
+            
+            // Ambil semua baris data di dalam tbody tabel
+            let table = document.getElementById("userTable");
+            let rows = table.getElementsByTagName("tbody")[0].getElementsByTagName("tr");
+            
+            // Lakukan perulangan untuk mengecek setiap baris user
+            for (let i = 0; i < rows.length; i++) {
+                // Kolom "Profile" berada di urutan ke-3 (index 2), karena index mulai dari 0:
+                // [0]=Server, [1]=Name, [2]=Profile
+                let profileCell = rows[i].cells[2]; 
+                
+                if (profileCell) {
+                    // Ambil teks nama profile di baris tersebut
+                    let profileText = profileCell.textContent || profileCell.innerText;
+                    profileText = profileText.toLowerCase().trim();
+                    
+                    // Logika Sembunyi/Tampil:
+                    // Jika dropdown pilih "Semua Profile" (kosong) ATAU nama profile di tabel cocok dengan pilihan
+                    if (selectedProfile === "" || profileText === selectedProfile) {
+                        rows[i].style.display = ""; // Tampilkan baris (munculkan kembali)
+                    } else {
+                        rows[i].style.display = "none"; // Sembunyikan baris
+                    }
+                }
+            }
+        });
+
+        // Fungsi utama untuk memfilter tabel User (Search Name + Dropdown Profile)
+        function filterUserTable() {
+            // 1. Ambil nilai ketikan dari input pencarian (jadikan huruf kecil)
+            let searchInput = document.getElementById('searchFilter');
+            let searchValue = searchInput ? searchInput.value.toLowerCase() : "";
+            
+            // 2. Ambil nilai dari dropdown Profile (jadikan huruf kecil)
+            let profileDropdown = document.getElementById('profileFilter');
+            let profileValue = profileDropdown ? profileDropdown.value.toLowerCase().trim() : "";
+            
+            // 3. Ambil elemen tabel (Pastikan tag table Anda memiliki id="userTable")
+            let table = document.getElementById("userTable");
+            if (!table) return; // Hentikan jika tabel tidak ditemukan
+            
+            // Ambil semua baris (tr) di dalam tbody
+            let rows = table.getElementsByTagName("tbody")[0].getElementsByTagName("tr");
+            
+            // 4. Lakukan perulangan untuk mengecek setiap baris
+            for (let i = 0; i < rows.length; i++) {
+                // PENTING: Sesuaikan angka index (cells) ini dengan urutan kolom di tabel HTML Anda.
+                // Index dimulai dari 0.
+                // Contoh: [0]=No, [1]=Server, [2]=Name, [3]=Profile
+                let nameCell = rows[i].cells[1];    // Ambil kolom Nama User
+                let profileCell = rows[i].cells[2]; // Ambil kolom Profile
+                
+                if (nameCell && profileCell) {
+                    let nameText = (nameCell.textContent || nameCell.innerText).toLowerCase();
+                    let profileText = (profileCell.textContent || profileCell.innerText).toLowerCase().trim();
+                    
+                    // Aturan 1: Cek apakah nama mengandung huruf yang diketik di kolom search
+                    let matchSearch = nameText.includes(searchValue);
+                    
+                    // Aturan 2: Cek apakah profile sama dengan pilihan dropdown (atau jika dropdown 'Semua/Kosong')
+                    let matchProfile = (profileValue === "") || (profileText === profileValue);
+                    
+                    // Tampilkan baris HANYA JIKA memenuhi kedua aturan tersebut
+                    if (matchSearch && matchProfile) {
+                        rows[i].style.display = "";
+                    } else {
+                        rows[i].style.display = "none";
+                    }
+                }
+            }
+        }
+
+        // Pasang 'pendengar' (Event Listener) agar fungsi dijalankan otomatis saat:
+        // - User mengetik di kotak pencarian
+        document.getElementById('searchFilter').addEventListener('keyup', filterUserTable);
+
+        // - User memilih opsi baru di dropdown Profile
+        document.getElementById('profileFilter').addEventListener('change', filterUserTable);
+
+        // Fungsi utama untuk memfilter tabel User (Search Name + Dropdown Profile + Dropdown Comment)
+        function filterUserTable() {
+            // 1. Ambil nilai dari ketiga input
+            let searchInput = document.getElementById('searchFilter');
+            let searchValue = searchInput ? searchInput.value.toLowerCase() : "";
+            
+            let profileDropdown = document.getElementById('profileFilter');
+            let profileValue = profileDropdown ? profileDropdown.value.toLowerCase().trim() : "";
+
+            let commentDropdown = document.getElementById('commentFilter');
+            let commentValue = commentDropdown ? commentDropdown.value.toLowerCase().trim() : "";
+            
+            // 2. Ambil elemen tabel
+            let table = document.getElementById("userTable");
+            if (!table) return;
+            
+            let rows = table.getElementsByTagName("tbody")[0].getElementsByTagName("tr");
+            
+            // 3. Lakukan perulangan untuk setiap baris
+            for (let i = 0; i < rows.length; i++) {
+                
+                // PENTING: Sesuaikan angka index (cells) di bawah ini dengan urutan kolom tabel Anda!
+                // Contoh: Jika Name di kolom ke-3, Profile ke-4, dan Comment di kolom ke-7
+                // Hitungan dimulai dari 0.
+                let nameCell = rows[i].cells[1];    // Kolom Name
+                let profileCell = rows[i].cells[2]; // Kolom Profile
+                let commentCell = rows[i].cells[7]; // Kolom Comment (Silakan ganti angkanya sesuai tabel asli Anda)
+                
+                if (nameCell && profileCell && commentCell) {
+                    let nameText = (nameCell.textContent || nameCell.innerText).toLowerCase();
+                    let profileText = (profileCell.textContent || profileCell.innerText).toLowerCase().trim();
+                    let commentText = (commentCell.textContent || commentCell.innerText).toLowerCase().trim();
+                    
+                    // Aturan Pengecekan
+                    let matchSearch = nameText.includes(searchValue);
+                    let matchProfile = (profileValue === "") || (profileText === profileValue);
+                    let matchComment = (commentValue === "") || (commentText === commentValue);
+                    
+                    // Tampilkan HANYA JIKA memenuhi KETIGA kondisi sekaligus
+                    if (matchSearch && matchProfile && matchComment) {
+                        rows[i].style.display = "";
+                    } else {
+                        rows[i].style.display = "none";
+                    }
+                }
+            }
+        }
+
+        // Pasang Event Listener untuk ketiga filter
+        document.getElementById('searchFilter').addEventListener('keyup', filterUserTable);
+        document.getElementById('profileFilter').addEventListener('change', filterUserTable);
+        document.getElementById('commentFilter').addEventListener('change', filterUserTable);
+
+        function openDeleteModal(id, name) {
+            document.getElementById('deleteUserId').value = id;
+            document.getElementById('deleteMessage').innerHTML = `Apakah Anda yakin ingin menghapus user hotspot <b>${name}</b>? Tindakan ini akan menghapus akun secara permanen dari router MikroTik.`;
+            
+            // Masukkan endpoint rute hapus Anda di sini nanti
+            document.getElementById('deleteForm').action = "/hotspot/user/delete"; 
+            
+            document.getElementById('deleteModal').classList.remove('hidden');
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').classList.add('hidden');
+        }
+
+        function printVouchers() {
+            alert('Fitur Cetak Voucher Lembaran (Print Template) akan kita hubungkan setelah ini!');
+        }
+    </script>
+
+{% endblock %}

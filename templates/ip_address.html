@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}IP Address - EINSTEIN{% endblock %}
+{% block content %}
+
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-1">IP Address</h2>
+            <p class="text-sm text-gray-500">Manajemen alamat IP pada antarmuka MikroTik Anda.</p>
+        </div>
+        <button onclick="openFormModal('add')" class="bg-blue-700 hover:bg-blue-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition shadow-sm inline-flex items-center">
+            <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Add IP
+        </button>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          {% if category == 'success' %}
+            <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded text-sm shadow-sm">
+                {{ message }}
+            </div>
+          {% else %}
+            <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded text-sm shadow-sm">
+                {{ message }}
+            </div>
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div class="overflow-x-auto bg-white rounded-xl border border-gray-100 shadow-sm">
+        <table class="min-w-full divide-y divide-gray-100 text-left text-sm">
+            <thead class="bg-gray-50 text-xs text-gray-500 uppercase font-semibold">
+                <tr>
+                    <th class="px-6 py-4">Address / Network</th>
+                    <th class="px-6 py-4">Interface</th>
+                    <th class="px-6 py-4">Status</th>
+                    <th class="px-6 py-4 text-center">Aksi</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 text-gray-700">
+                {% for ip in ips %}
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-6 py-4">
+                        <div class="font-bold text-gray-900">{{ ip.address }}</div>
+                        <div class="text-xs text-gray-400">Net: {{ ip.network }}</div>
+                    </td>
+                    <td class="px-6 py-4 font-medium">{{ ip.interface }}</td>
+                    <td class="px-6 py-4">
+                        {% if ip.disabled == 'true' %}
+                            <span class="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded">Disabled</span>
+                        {% else %}
+                            <span class="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded">Enabled</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 flex justify-center gap-2">
+                        
+                        <button type="button" 
+                            data-id="{{ ip.get('.id') or ip.get('id') }}" 
+                            data-address="{{ ip.address }}" 
+                            data-interface="{{ ip.interface }}"
+                            onclick="openFormModal('edit', this.getAttribute('data-id'), this.getAttribute('data-address'), this.getAttribute('data-interface'))" 
+                            class="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors" title="Edit IP">
+                            <i data-lucide="edit-2" class="w-4 h-4"></i>
+                        </button>
+
+                        <button type="button" 
+                                data-id="{{ ip.get('.id') or ip.get('id') }}" 
+                                data-address="{{ ip.address }}"
+                                onclick="openConfirmModal(this.getAttribute('data-id'), this.getAttribute('data-address'))" 
+                                class="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors" title="Hapus IP">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div id="formModal" class="fixed inset-0 z-50 hidden" aria-modal="true">
+        <div class="fixed inset-0 bg-gray-900 bg-opacity-40 backdrop-blur-sm transition-opacity"></div>
+        <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+            <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
+                <div id="formModalPanel" class="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-md scale-95 opacity-0 duration-300">
+                    
+                    <div class="bg-white px-6 pb-6 pt-5">
+                        <div class="flex justify-between items-center mb-5">
+                            <h3 class="text-xl font-bold text-gray-900" id="formModalTitle">Tambah IP Address</h3>
+                            <button onclick="closeModal('formModal')" class="text-gray-400 hover:text-gray-600">
+                                <i data-lucide="x" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                        
+                        <form id="ipForm" method="POST" action="">
+                            <input type="hidden" name="id" id="formIpId">
+                            
+                            <div class="mb-4">
+                                <label class="block text-sm font-semibold text-gray-700 mb-1">IP Address (CIDR)</label>
+                                <input type="text" name="address" id="formAddress" placeholder="192.168.1.1/24" required 
+                                       class="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900">
+                            </div>
+                            
+                            <div class="mb-6">
+                                <label class="block text-sm font-semibold text-gray-700 mb-1">Interface</label>
+                                <select name="interface" id="formInterface" required class="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900">
+                                    {% for iface in interfaces %}
+                                        <option value="{{ iface.name }}">{{ iface.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="flex space-x-3 justify-end">
+                                <button type="button" onclick="closeModal('formModal')" class="px-5 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">Batal</button>
+                                <button type="submit" id="formSubmitBtn" class="px-5 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-lg transition text-sm font-medium shadow-sm">Simpan IP</button>
+                            </div>
+                        </form>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirmModal" class="fixed inset-0 z-50 hidden" aria-modal="true">
+        <div class="fixed inset-0 bg-gray-900 bg-opacity-40 backdrop-blur-sm transition-opacity"></div>
+        <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+            <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
+                <div id="confirmModalPanel" class="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-md scale-95 opacity-0 duration-300">
+                    
+                    <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+                        <div class="sm:flex sm:items-start">
+                            <div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full sm:mx-0 sm:h-10 sm:w-10 bg-red-100">
+                                <i data-lucide="trash-2" class="h-6 w-6 text-red-600"></i>
+                            </div>
+                            <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+                                <h3 class="text-xl font-bold text-gray-900">Hapus IP Address</h3>
+                                <div class="mt-2">
+                                    <p class="text-sm text-gray-500" id="confirmMessage">Pesan konfirmasi di sini.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-50 px-4 py-4 sm:flex sm:flex-row-reverse sm:px-6">
+                        <form id="confirmForm" method="POST" action="{{ url_for('delete_ip') }}">
+                            <input type="hidden" name="id" id="confirmIpId">
+                            <button type="submit" class="inline-flex w-full justify-center rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm sm:ml-3 sm:w-auto transition-colors bg-red-600 hover:bg-red-500">
+                                Ya, Hapus
+                            </button>
+                        </form>
+                        <button type="button" onclick="closeModal('confirmModal')" class="mt-3 inline-flex w-full justify-center rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto transition-colors">
+                            Batal
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Fungsi Modal Add & Edit ---
+        function openFormModal(mode, id = '', address = '', interface = '') {
+            const form = document.getElementById('ipForm');
+            const title = document.getElementById('formModalTitle');
+            const btn = document.getElementById('formSubmitBtn');
+
+            if (mode === 'add') {
+                title.textContent = 'Tambah IP Address';
+                form.action = "{{ url_for('add_ip') }}";
+                document.getElementById('formIpId').value = '';
+                document.getElementById('formAddress').value = '';
+                btn.textContent = 'Tambah IP';
+            } else if (mode === 'edit') {
+                title.textContent = 'Edit IP Address';
+                form.action = "{{ url_for('edit_ip') }}";
+                document.getElementById('formIpId').value = id;
+                document.getElementById('formAddress').value = address;
+                document.getElementById('formInterface').value = interface;
+                btn.textContent = 'Simpan Perubahan';
+            }
+            
+            showModal('formModal');
+        }
+
+        // --- Fungsi Modal Konfirmasi (Khusus Delete) ---
+        function openConfirmModal(id, address) {
+            document.getElementById('confirmIpId').value = id;
+            document.getElementById('confirmMessage').innerHTML = `Apakah Anda yakin ingin menghapus IP <b>${address}</b>? Tindakan ini tidak dapat dibatalkan.`;
+            
+            showModal('confirmModal');
+        }
+
+        // --- Helper Animasi Modal ---
+        function showModal(modalId) {
+            const modal = document.getElementById(modalId);
+            const panel = document.getElementById(modalId + 'Panel');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                panel.classList.remove('scale-95', 'opacity-0');
+                panel.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
+            const panel = document.getElementById(modalId + 'Panel');
+            panel.classList.remove('scale-100', 'opacity-100');
+            panel.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+    </script>
+{% endblock %}

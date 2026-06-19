@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Interfaces - EINSTEIN{% endblock %}
+{% block content %}
+    <h2 class="text-2xl font-bold text-gray-800 mb-2">Daftar Interface</h2>
+    <p class="text-sm text-gray-500 mb-4">Membaca data live dari router Anda.</p>
+    
+    <div class="overflow-x-auto bg-white rounded-xl border border-gray-100 shadow-sm">
+        <table class="min-w-full divide-y divide-gray-100 text-left text-sm">
+            <thead class="bg-gray-50 text-xs text-gray-500 uppercase font-semibold">
+                <tr>
+                    <th class="px-6 py-4">Status</th>
+                    <th class="px-6 py-4">Nama Port</th>
+                    <th class="px-6 py-4">Tipe</th>
+                    <th class="px-6 py-4">MAC Address</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 text-gray-700">
+                {% for iface in interfaces %}
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-6 py-4">
+                        {% if iface.disabled == 'true' %}
+                            <span class="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded">Disabled</span>
+                        {% elif iface.running == 'true' %}
+                            <span class="px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded">Running</span>
+                        {% else %}
+                            <span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-bold rounded">Ready</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 font-semibold text-gray-900">{{ iface.name }}</td>
+                    <td class="px-6 py-4 text-gray-500">{{ iface.type }}</td>
+                    <td class="px-6 py-4 font-mono text-xs">{{ iface.get('mac-address', 'N/A') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

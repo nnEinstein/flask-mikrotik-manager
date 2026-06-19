@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - EINSTEIN{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+    <h2 class="text-2xl font-bold text-gray-800 mb-1">Dashboard</h2>
+    <p class="text-sm text-gray-500">Ringkasan status dan performa perangkat MikroTik Anda.</p>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col justify-between">
+        <div>
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="p-2.5 bg-amber-50 text-amber-600 rounded-lg">
+                    <i data-lucide="wifi" class="w-5 h-5"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800">Hotspot</h3>
+            </div>
+            
+            <div class="space-y-3 text-sm mb-5">
+                <div class="flex justify-between py-2 border-b border-gray-50">
+                    <span class="text-gray-400">Hotspot Aktif</span>
+                    <span class="px-2 py-0.5 bg-green-50 text-green-700 font-bold rounded-md text-xs inline-flex items-center">
+                        {{ hotspot.active | default('0') }} User Online
+                    </span>
+                </div>
+                <div class="flex justify-between py-2">
+                    <span class="text-gray-400">Total Hotspot User</span>
+                    <span class="font-semibold text-gray-800">{{ hotspot.users_count | default('0') }} Item</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 pt-4 border-t border-gray-50">
+            <button type="button" onclick="alert('Fitur Add Hotspot User segera hadir!')" class="flex items-center justify-center bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-semibold py-2 px-3 rounded-lg transition border border-gray-200">
+                <i data-lucide="user-plus" class="w-4 h-4 mr-1.5 text-gray-500"></i> Add User
+            </button>
+            <button type="button" onclick="alert('Fitur Generate Hotspot User segera hadir!')" class="flex items-center justify-center bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold py-2 px-3 rounded-lg transition border border-amber-200">
+                <i data-lucide="ticket" class="w-4 h-4 mr-1.5 text-amber-600"></i> Generate
+            </button>
+        </div>
+    </div>
+
+        
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col justify-between">
+            <div>
+                <div class="flex items-center space-x-3 mb-4">
+                    <div class="p-2.5 bg-gray-900 text-white rounded-lg">
+                        <i data-lucide="server" class="w-5 h-5"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-800">Informasi Router</h3>
+                </div>
+                
+                <div class="space-y-3 text-sm">
+                    <div class="flex justify-between py-2 border-b border-gray-50">
+                        <span class="text-gray-400">Board Name</span>
+                        <span class="font-semibold text-gray-800">{{ router.board_name | default('MikroTik') }}</span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-gray-50">
+                        <span class="text-gray-400">Model</span>
+                        <span class="font-semibold text-gray-800">{{ router.model | default('RB750Gr3') }}</span>
+                    </div>
+                    <div class="flex justify-between py-2">
+                        <span class="text-gray-400">RouterOS Version</span>
+                        <span class="font-semibold text-gray-800">{{ router.version | default('7.x') }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 pt-4 border-t border-transparent"></div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col justify-between">
+            <div>
+                <div class="flex items-center space-x-3 mb-4">
+                    <div class="p-2.5 bg-blue-50 text-blue-600 rounded-lg">
+                        <i data-lucide="activity" class="w-5 h-5"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-800">Performa Sistem</h3>
+                </div>
+                
+                <div class="space-y-3 text-sm">
+                    <div class="flex justify-between py-2 border-b border-gray-50">
+                        <span class="text-gray-400">CPU Load</span>
+                        <span class="font-semibold text-gray-800">{{ perf.cpu_load | default('0') }}%</span>
+                    </div>
+                    <div class="flex justify-between py-2 border-b border-gray-50">
+                        <span class="text-gray-400">Free Memory</span>
+                        <span class="font-semibold text-gray-800">{{ perf.free_memory | default('0 MB') }}</span>
+                    </div>
+                    <div class="flex justify-between py-2">
+                        <span class="text-gray-400">Free HDD</span>
+                        <span class="font-semibold text-gray-800">{{ perf.free_hdd | default('0 MB') }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 pt-4 border-t border-transparent"></div>
+        </div>
+
+
+    </div>
+
+{% endblock %}

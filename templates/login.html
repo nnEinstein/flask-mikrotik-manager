@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen font-sans">
+    
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm">
+        <h3 class="text-2xl font-extrabold text-center text-gray-900 mb-6 tracking-widest">Endev Network</h3>
+        
+        <!-- Notifikasi Error -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-3 mb-5 text-sm rounded">
+                  {{ message }}
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('login') }}">
+            <div class="mb-4">
+                <label for="username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <input type="text" id="username" name="username" required 
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition">
+            </div>
+            <div class="mb-6">
+                <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input type="password" id="password" name="password" required 
+                       class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition">
+            </div>
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-800 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                Login
+            </button>
+        </form>
+    </div>
+
+</body>
+</html>

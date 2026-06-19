@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Add Profile Hotspot - EINSTEIN{% endblock %}
+{% block content %}
+
+    <div class="mb-6">
+        <h2 class="text-2xl font-bold text-gray-800 mb-1">Add Hotspot Profile</h2>
+        <p class="text-sm text-gray-500">Buat paket layanan, batasan kecepatan, dan logika masa aktif pengguna.</p>
+    </div>
+
+    <div class="flex flex-col lg:flex-row gap-6">
+        
+        <div class="lg:w-2/3 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+            <form action="{{ url_for('add_hotspot_profile') }}" method="POST">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Name <span class="text-red-500">*</span></label>
+                        <input type="text" name="name" required placeholder="Contoh: 1_Bulan_50K" 
+                               class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Address Pool</label>
+                        <select name="address_pool" class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition cursor-pointer">
+                            <option value="none">none</option>
+                            {% for pool in pools %}
+                            <option value="{{ pool.name }}">{{ pool.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Shared Users</label>
+                        <input type="number" name="shared_users" value="1" min="1" 
+                               class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Rate Limit [UP/DOWN]</label>
+                        <input type="text" name="rate_limit" placeholder="Contoh: 1M/2M" 
+                               class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Validity</label>
+                        <input type="text" name="validity" placeholder="Contoh: 30d" 
+                               class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Expired Mode</label>
+                        <select name="expired_mode" class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition cursor-pointer">
+                            <option value="0">None</option>
+                            <option value="rem">Remove</option>
+                            <option value="ntc">Notice</option>
+                            <option value="remc">Remove & Record</option>
+                            <option value="ntcc">Notice & Record</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Harga (Rp)</label>
+                        <input type="number" name="harga" placeholder="Contoh: 50000" 
+                               class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Lock User</label>
+                        <select name="lock_user" class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition cursor-pointer">
+                            <option value="Disable">Disable</option>
+                            <option value="Enable">Enable</option>
+                        </select>
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Parent Queue</label>
+                        <select name="parent_queue" class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition cursor-pointer">
+                            <option value="none">none</option>
+                            {% for queue in queues %}
+                            <option value="{{ queue.name }}">{{ queue.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-3 pt-4 border-t border-gray-100 mt-6">
+                    <button type="submit" class="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm flex items-center">
+                        <i data-lucide="save" class="w-4 h-4 mr-2"></i> Save Profile
+                    </button>
+                    <a href="{{ url_for('hotspot_profile_list') }}" class="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg transition-colors text-center">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <div class="lg:w-1/3 space-y-4">
+            
+            <div class="bg-blue-50 rounded-xl p-5 border border-blue-100">
+                <div class="flex items-center text-blue-700 mb-2">
+                    <i data-lucide="clock" class="w-5 h-5 mr-2"></i>
+                    <h3 class="font-bold text-sm">Format Validity</h3>
+                </div>
+                <p class="text-xs text-blue-800 leading-relaxed mb-2">
+                    Gunakan format huruf di bawah ini untuk menentukan masa aktif.
+                </p>
+                <ul class="text-xs text-blue-800 space-y-1 ml-1 font-mono">
+                    <li><span class="font-bold text-blue-900">m</span> = Menit (contoh: 30m)</li>
+                    <li><span class="font-bold text-blue-900">h</span> = Jam (contoh: 12h)</li>
+                    <li><span class="font-bold text-blue-900">d</span> = Hari (contoh: 30d)</li>
+                </ul>
+            </div>
+
+            <div class="bg-amber-50 rounded-xl p-5 border border-amber-100">
+                <div class="flex items-center text-amber-700 mb-2">
+                    <i data-lucide="alert-circle" class="w-5 h-5 mr-2"></i>
+                    <h3 class="font-bold text-sm">Expired Mode</h3>
+                </div>
+                <ul class="text-xs text-amber-800 space-y-2 leading-relaxed">
+                    <li><strong class="text-amber-900">None:</strong> Tidak ada aksi otomatis saat masa aktif habis.</li>
+                    <li><strong class="text-amber-900">Remove:</strong> User akan otomatis dihapus dari sistem saat expired.</li>
+                    <li><strong class="text-amber-900">Notice:</strong> User tidak dihapus, namun internet diputus dan dialihkan ke halaman pemberitahuan.</li>
+                    <li><strong class="text-amber-900">& Record:</strong> Jika dipilih, sistem akan mencatat riwayat penjualan untuk laporan keuangan.</li>
+                </ul>
+            </div>
+
+            <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+                <div class="flex items-center text-gray-700 mb-2">
+                    <i data-lucide="lock" class="w-5 h-5 mr-2"></i>
+                    <h3 class="font-bold text-sm">Lock User (MAC Binding)</h3>
+                </div>
+                <p class="text-xs text-gray-600 leading-relaxed">
+                    Jika diatur <strong class="text-gray-800">Enable</strong>, voucher hanya bisa digunakan pada perangkat pertama yang login (terkunci pada MAC Address perangkat tersebut). Perangkat lain tidak akan bisa menggunakan voucher yang sama meskipun tahu passwordnya.
+                </p>
+            </div>
+
+        </div>
+    </div>
+
+{% endblock %}

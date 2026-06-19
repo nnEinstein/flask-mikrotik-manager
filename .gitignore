@@ -1,0 +1,15 @@
+# Mengabaikan Cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Mengabaikan Database Lokal (jika pakai SQLite)
+instance/
+*.db
+*.sqlite3
+
+# Mengabaikan konfigurasi teks editor / IDE
+.vscode/
+.idea/
+.DS_Store

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}About - EINSTEIN{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto mt-6">
+    <!-- Kotak Utama (Card) -->
+    <div class="bg-white border border-gray-100 rounded-2xl shadow-sm p-8 text-center sm:text-left">
+        
+        <!-- Judul About -->
+        <h2 class="text-3xl font-extrabold text-gray-900 tracking-tight">About</h2>
+        
+        <!-- Border di Bawah Judul -->
+        <div class="h-1 w-20 bg-gray-900 my-4 mx-auto sm:mx-0 rounded-full"></div>
+        
+        <!-- Konten Informasi -->
+        <div class="space-y-6 mt-6">
+            <!-- Nama Aplikasi & Versi -->
+            <div>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+                    Application
+                </span>
+                <p class="text-xl font-bold text-gray-800 mt-2">Endev Network V.1.0</p>
+            </div>
+
+            <!-- Keterangan Creator -->
+            <div class="border-t border-gray-100 pt-4">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+                    Creator
+                </span>
+                <p class="text-lg font-semibold text-gray-900 mt-2">Einstein Ahmad Prasetyo</p>
+            </div>
+
+            <!-- Sosial Media Instagram -->
+            <div class="border-t border-gray-100 pt-4">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+                    Instagram
+                </span>
+                <p class="mt-2">
+                    <a href="https://instagram.com/hello_en.ap" target="_blank" class="inline-flex items-center text-blue-600 hover:text-blue-800 font-medium transition-colors">
+                        <!-- Ikon Instagram bawaan dari Lucide jika Anda sudah pasang, atau pakai teks saja -->
+                        <i data-lucide="instagram" class="w-4 h-4 mr-2"></i>
+                        @hello_en.ap
+                    </a>
+                </p>
+            </div>
+        </div>
+
+        <!-- Copyright -->
+        <div class="border-t border-gray-100 mt-8 pt-6 text-center text-xs text-gray-400">
+            &copy; 2026 Einstein Ahmad Prasetyo. All rights reserved.
+        </div>
+
+    </div>
+</div>
+{% endblock %}
