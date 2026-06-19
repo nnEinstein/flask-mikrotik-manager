@@ -1,8 +1,9 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 import os
 from dotenv import load_dotenv
 from flask_sqlalchemy import SQLAlchemy
 import routeros_api
+import re
 
 load_dotenv()
 app = Flask(__name__)
@@ -743,6 +744,184 @@ def delete_hotspot_active():
             connection.disconnect()
             
     return redirect(url_for('hotspot_active_list'))
+
+# ==========================================
+# UJI KONEKSI
+# ==========================================
+
+@app.route('/uji-koneksi')
+@login_required
+@router_connected_required
+def uji_koneksi():
+    return render_template('uji_koneksi.html')
+
+
+@app.route('/uji-koneksi/ping', methods=['POST'])
+@login_required
+@router_connected_required
+def uji_ping():
+    host  = request.form.get('host', '8.8.8.8')
+    count = request.form.get('count', '4')
+
+    api, connection = get_mikrotik_api()
+    if not api:
+        return jsonify({'error': 'Koneksi ke router gagal.'})
+
+    try:
+        ping_api = api.get_binary_resource('/')
+        raw = api.get_resource('/').call('ping', {'address': host, 'count': count})
+
+        results = []
+        sent = received = 0
+        rtt_total = 0
+
+        for r in raw:
+            sent += 1
+            status_raw = r.get('status', '')
+            
+            # Kalau status kosong = reply berhasil
+            is_reply = status_raw == '' or status_raw not in ('timeout', 'no reply')
+            status   = 'reply' if is_reply else 'timeout'
+            ttl      = r.get('ttl', None)
+            rtt      = r.get('time', None)
+
+            if is_reply and rtt:
+                received += 1
+                # Ambil bagian ms saja, contoh: "65ms458us" → "65"
+                import re
+                ms_match = re.search(r'(\d+)ms', rtt)
+                rtt_ms   = ms_match.group(1) if ms_match else '0'
+                rtt_total += int(rtt_ms)
+            else:
+                rtt_ms = None
+
+            results.append({'status': status, 'rtt': rtt_ms, 'ttl': ttl})
+
+        loss    = round((sent - received) / sent * 100) if sent else 100
+        avg_rtt = round(rtt_total / received) if received else 0
+
+        return jsonify({
+            'host':        host,
+            'packet_loss': f'{loss}%',
+            'avg_rtt':     avg_rtt,
+            'results':     results
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)})
+    finally:
+        connection.disconnect()
+
+
+@app.route('/uji-koneksi/traceroute', methods=['POST'])
+@login_required
+@router_connected_required
+def uji_traceroute():
+    host = request.form.get('host', '8.8.8.8')
+
+    api, connection = get_mikrotik_api()
+    if not api:
+        return jsonify({'error': 'Koneksi ke router gagal.'})
+
+    try:
+        tool_api = api.get_binary_resource('/')
+        raw = api.get_resource('/').call('tool/traceroute', {'address': host, 'count': '1'})
+
+        results = []
+        for r in raw:
+            hop     = r.get('#', r.get('hop', '?'))
+            address = r.get('address', None)
+            rtt     = r.get('time1', r.get('time', None))
+            status  = r.get('status', '')
+
+            rtt_ms = ''.join(filter(str.isdigit, rtt)) if rtt else None
+
+            results.append({
+                'hop':     hop,
+                'address': address,
+                'rtt':     rtt_ms,
+                'status':  'reached' if address and address == host else status
+            })
+
+        return jsonify({'host': host, 'results': results})
+
+    except Exception as e:
+        return jsonify({'error': str(e)})
+    finally:
+        connection.disconnect()
+
+
+@app.route('/uji-koneksi/interface', methods=['POST'])
+@login_required
+@router_connected_required
+def uji_interface():
+    api, connection = get_mikrotik_api()
+    if not api:
+        return jsonify({'error': 'Koneksi ke router gagal.'})
+
+    try:
+        raw = api.get_resource('/interface').get()
+
+        results = [{
+            'name':     iface.get('name', '-'),
+            'type':     iface.get('type', '-'),
+            'running':  iface.get('running', 'false'),
+            'disabled': iface.get('disabled', 'true'),
+            'comment':  iface.get('comment', '')
+        } for iface in raw]
+
+        return jsonify({'results': results})
+
+    except Exception as e:
+        return jsonify({'error': str(e)})
+    finally:
+        connection.disconnect()
+
+
+@app.route('/uji-koneksi/internet', methods=['POST'])
+@login_required
+@router_connected_required
+def uji_internet():
+    hosts = ['8.8.8.8', '1.1.1.1', 'google.com']
+
+    api, connection = get_mikrotik_api()
+    if not api:
+        return jsonify({'error': 'Koneksi ke router gagal.'})
+
+    try:
+        results = []
+        for host in hosts:
+            try:
+                raw = api.get_resource('/').call('ping', {'address': host, 'count': '3'})
+
+                received  = 0
+                rtt_total = 0
+
+                for r in raw:
+                    status_raw = r.get('status', '')
+                    is_reply   = status_raw == '' or status_raw not in ('timeout', 'no reply')
+                    if is_reply:
+                        received += 1
+                        rtt = r.get('time', '0')
+                        ms_match   = re.search(r'(\d+)ms', rtt)
+                        rtt_ms     = int(ms_match.group(1)) if ms_match else 0
+                        rtt_total += rtt_ms
+
+                results.append({
+                    'host':      host,
+                    'reachable': received > 0,
+                    'avg_rtt':   round(rtt_total / received) if received else None
+                })
+
+            except Exception:
+                results.append({'host': host, 'reachable': False, 'avg_rtt': None})
+
+        return jsonify({'results': results})
+
+    except Exception as e:
+        return jsonify({'error': str(e)})
+    finally:
+        connection.disconnect()
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, debug=True)
