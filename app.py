@@ -285,6 +285,155 @@ def delete_ip():
         connection.disconnect()
     return redirect(url_for('ip_address'))
 
+#Route connect internet
+@app.route('/connect-internet', methods=['GET', 'POST'])
+@login_required
+@router_connected_required
+def connect_internet():
+
+    # GET: tampilkan form, ambil list interface dari MikroTik
+    if request.method == 'GET':
+        api, connection = get_mikrotik_api()
+        interfaces = []
+        if api:
+            try:
+                interfaces = api.get_resource('/interface').get()
+            except Exception as e:
+                flash(f'Gagal memuat interface: {e}', 'danger')
+            finally:
+                connection.disconnect()
+        return render_template('connect_internet.html', interfaces=interfaces)
+
+    # POST: proses konfigurasi
+    conn_type = request.form.get('type')
+    interface = request.form.get('interface')
+
+    if not interface or not conn_type:
+        flash('Interface dan tipe koneksi wajib dipilih.', 'danger')
+        return redirect(url_for('connect_internet'))
+
+    api, connection = get_mikrotik_api()
+    if not api:
+        flash('Koneksi ke router gagal.', 'danger')
+        return redirect(url_for('connect_internet'))
+
+    try:
+        if conn_type == 'dhcp':
+            _setup_dhcp(api, interface)
+
+        elif conn_type == 'static':
+            ip      = request.form.get('static_ip')
+            gateway = request.form.get('static_gateway')
+            dns1    = request.form.get('static_dns1')
+            dns2    = request.form.get('static_dns2', '')
+            if not ip or not gateway or not dns1:
+                flash('IP Address, Gateway, dan DNS 1 wajib diisi untuk Static IP.', 'danger')
+                return redirect(url_for('connect_internet'))
+            _setup_static(api, interface, ip, gateway, dns1, dns2)
+
+        elif conn_type == 'pppoe':
+            username = request.form.get('pppoe_user')
+            password = request.form.get('pppoe_pass')
+            service  = request.form.get('pppoe_service', '')
+            dns1     = request.form.get('pppoe_dns1', '')
+            dns2     = request.form.get('pppoe_dns2', '')
+            if not username or not password:
+                flash('Username dan Password wajib diisi untuk PPPoE.', 'danger')
+                return redirect(url_for('connect_internet'))
+            _setup_pppoe(api, interface, username, password, service, dns1, dns2)
+
+        flash(f'Koneksi {conn_type.upper()} pada interface {interface} berhasil diterapkan!', 'success')
+        return redirect(url_for('ip_address'))
+
+    except Exception as e:
+        flash(f'Gagal menerapkan konfigurasi: {e}', 'danger')
+        return redirect(url_for('connect_internet'))
+    finally:
+        connection.disconnect()
+
+
+def _setup_dhcp(api, interface):
+    """Buat DHCP client pada interface yang dipilih."""
+    # Hapus DHCP client lama di interface ini jika ada
+    existing = api.get_resource('/ip/dhcp-client').get()
+    for item in existing:
+        if item.get('interface') == interface:
+            api.get_resource('/ip/dhcp-client').remove(id=item.get('.id'))
+
+    api.get_resource('/ip/dhcp-client').add(
+        interface=interface,
+        disabled='no'
+    )
+
+
+def _setup_static(api, interface, ip, gateway, dns1, dns2):
+    """Set IP statis, default route, dan DNS."""
+    # Hapus IP lama di interface ini
+    existing_ips = api.get_resource('/ip/address').get()
+    for item in existing_ips:
+        if item.get('interface') == interface:
+            api.get_resource('/ip/address').remove(id=item.get('.id'))
+
+    # Tambah IP baru
+    api.get_resource('/ip/address').add(
+        address=ip,
+        interface=interface
+    )
+
+    # Hapus default route lama jika ada
+    existing_routes = api.get_resource('/ip/route').get()
+    for item in existing_routes:
+        if item.get('dst-address') == '0.0.0.0/0':
+            api.get_resource('/ip/route').remove(id=item.get('.id'))
+
+    # Tambah default gateway
+    api.get_resource('/ip/route').add(**{
+        'dst-address': '0.0.0.0/0',
+        'gateway': gateway
+    })
+
+    # Set DNS
+    dns_servers = dns1
+    if dns2:
+        dns_servers += f',{dns2}'
+    api.get_resource('/ip/dns').set(**{
+        'servers': dns_servers,
+        'allow-remote-requests': 'yes'
+    })
+
+
+def _setup_pppoe(api, interface, username, password, service, dns1, dns2):
+    """Buat PPPoE client pada interface yang dipilih."""
+    # Hapus PPPoE client lama di interface ini jika ada
+    existing = api.get_resource('/interface/pppoe-client').get()
+    for item in existing:
+        if item.get('interface') == interface:
+            api.get_resource('/interface/pppoe-client').remove(id=item.get('.id'))
+
+    pppoe_data = {
+        'name':           f'pppoe-{interface}',
+        'interface':      interface,
+        'user':           username,
+        'password':       password,
+        'disabled':       'no',
+        'add-default-route': 'yes',
+        'use-peer-dns':   'yes' if not dns1 else 'no',
+    }
+    if service:
+        pppoe_data['service-name'] = service
+
+    api.get_resource('/interface/pppoe-client').add(**pppoe_data)
+
+    # Set DNS manual jika diisi
+    if dns1:
+        dns_servers = dns1
+        if dns2:
+            dns_servers += f',{dns2}'
+        api.get_resource('/ip/dns').set(**{
+            'servers': dns_servers,
+            'allow-remote-requests': 'yes'
+        })
+
 # ==========================================
 # HOTSPOT USER
 # ==========================================

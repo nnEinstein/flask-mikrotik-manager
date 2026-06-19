@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}Hubungkan Internet - EINSTEIN{% endblock %}
+{% block content %}
+
+    <div class="mb-6">
+        <h2 class="text-2xl font-bold text-gray-800 mb-1">Hubungkan Internet</h2>
+        <p class="text-sm text-gray-500">Konfigurasi koneksi internet pada interface MikroTik Anda.</p>
+    </div>
+
+    <div class="flex flex-col lg:flex-row gap-6">
+
+        <div class="lg:w-2/3 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+            <form id="connectForm" action="#" method="POST">
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Nama Interface <span class="text-red-500">*</span></label>
+                        <select name="interface" required class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition cursor-pointer">
+                            <option value="">-- Pilih Interface --</option>
+                            {% for iface in interfaces %}
+                            <option value="{{ iface.name }}">{{ iface.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Tipe Koneksi <span class="text-red-500">*</span></label>
+                        <select name="type" id="connType" required onchange="toggleForm(this.value)"
+                                class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition cursor-pointer">
+                            <option value="">-- Pilih Tipe --</option>
+                            <option value="dhcp">DHCP</option>
+                            <option value="static">Static IP</option>
+                            <option value="pppoe">PPPoE</option>
+                        </select>
+                    </div>
+
+                </div>
+
+                <!-- DHCP: tidak ada form tambahan -->
+                <div id="section-dhcp" class="hidden">
+                    <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
+                        <i data-lucide="info" class="w-5 h-5 text-blue-500 mt-0.5 shrink-0"></i>
+                        <p class="text-sm text-blue-800">Mode <b>DHCP</b> akan mengambil IP secara otomatis dari ISP. Tidak diperlukan konfigurasi tambahan.</p>
+                    </div>
+                </div>
+
+                <!-- Static IP -->
+                <div id="section-static" class="hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="md:col-span-2">
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">IP Address / Prefix <span class="text-red-500">*</span></label>
+                            <input type="text" name="static_ip" placeholder="Contoh: 192.168.1.2/24"
+                                   class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Gateway <span class="text-red-500">*</span></label>
+                            <input type="text" name="static_gateway" placeholder="Contoh: 192.168.1.1"
+                                   class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">DNS 1 <span class="text-red-500">*</span></label>
+                            <input type="text" name="static_dns1" placeholder="Contoh: 8.8.8.8"
+                                   class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">DNS 2</label>
+                            <input type="text" name="static_dns2" placeholder="Contoh: 8.8.4.4"
+                                   class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PPPoE -->
+                <div id="section-pppoe" class="hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Username <span class="text-red-500">*</span></label>
+                            <input type="text" name="pppoe_user" placeholder="Username dari ISP"
+                                   class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Password <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <input type="password" name="pppoe_pass" id="pppoePass" placeholder="Password dari ISP"
+                                       class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 pr-10 transition">
+                                <button type="button" onclick="togglePassword()" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <i data-lucide="eye" id="eyeIcon" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Service Name</label>
+                            <input type="text" name="pppoe_service" placeholder="Kosongkan jika tidak tahu"
+                                   class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">DNS 1 <span class="text-gray-400 font-normal normal-case">(opsional)</span></label>
+                            <input type="text" name="pppoe_dns1" placeholder="Contoh: 8.8.8.8"
+                                   class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">DNS 2 <span class="text-gray-400 font-normal normal-case">(opsional)</span></label>
+                            <input type="text" name="pppoe_dns2" placeholder="Contoh: 8.8.4.4"
+                                   class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tombol Aksi -->
+                <div id="formActions" class="hidden items-center space-x-3 pt-5 border-t border-gray-100 mt-6">
+                    <button type="submit" class="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm flex items-center">
+                        <i data-lucide="save" class="w-4 h-4 mr-2"></i> Simpan & Terapkan
+                    </button>
+                    <a href="{{ url_for('ip_address') }}" class="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg transition-colors text-center">
+                        Cancel
+                    </a>
+                </div>
+
+            </form>
+        </div>
+
+        <!-- Panel Kanan -->
+        <div class="lg:w-1/3 space-y-4">
+
+            <div id="hint-default" class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+                <div class="flex items-center text-gray-600 mb-2">
+                    <i data-lucide="mouse-pointer-2" class="w-5 h-5 mr-2"></i>
+                    <h3 class="font-bold text-sm">Pilih Tipe Koneksi</h3>
+                </div>
+                <p class="text-xs text-gray-500 leading-relaxed">
+                    Pilih interface dan tipe koneksi terlebih dahulu untuk melihat form konfigurasi yang sesuai.
+                </p>
+            </div>
+
+            <div id="hint-dhcp" class="hidden bg-blue-50 rounded-xl p-5 border border-blue-100">
+                <div class="flex items-center text-blue-700 mb-2">
+                    <i data-lucide="zap" class="w-5 h-5 mr-2"></i>
+                    <h3 class="font-bold text-sm">DHCP</h3>
+                </div>
+                <p class="text-xs text-blue-800 leading-relaxed">Router akan meminta IP otomatis dari ISP. Cocok untuk koneksi rumahan atau ISP yang tidak memberi IP statis.</p>
+            </div>
+
+            <div id="hint-static" class="hidden bg-amber-50 rounded-xl p-5 border border-amber-100">
+                <div class="flex items-center text-amber-700 mb-2">
+                    <i data-lucide="server" class="w-5 h-5 mr-2"></i>
+                    <h3 class="font-bold text-sm">Static IP</h3>
+                </div>
+                <p class="text-xs text-amber-800 leading-relaxed">IP, Gateway, dan DNS dikonfigurasi manual. Pastikan data ini didapat dari ISP Anda agar koneksi berhasil.</p>
+            </div>
+
+            <div id="hint-pppoe" class="hidden bg-purple-50 rounded-xl p-5 border border-purple-100">
+                <div class="flex items-center text-purple-700 mb-2">
+                    <i data-lucide="cable" class="w-5 h-5 mr-2"></i>
+                    <h3 class="font-bold text-sm">PPPoE</h3>
+                </div>
+                <p class="text-xs text-purple-800 leading-relaxed">Umum digunakan oleh ISP fiber (IndiHome, Biznet, dll). Masukkan username dan password yang diberikan ISP. Service name bisa dikosongkan jika tidak tahu.</p>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        function toggleForm(type) {
+            // Sembunyikan semua section
+            ['dhcp', 'static', 'pppoe'].forEach(t => {
+                document.getElementById('section-' + t).classList.add('hidden');
+                document.getElementById('hint-' + t).classList.add('hidden');
+            });
+
+            // Tampilkan hint default jika tidak ada pilihan
+            const hintDefault = document.getElementById('hint-default');
+            const formActions = document.getElementById('formActions');
+
+            if (!type) {
+                hintDefault.classList.remove('hidden');
+                formActions.classList.add('hidden');
+                formActions.classList.remove('flex');
+                return;
+            }
+
+            // Tampilkan section & hint sesuai pilihan
+            hintDefault.classList.add('hidden');
+            document.getElementById('section-' + type).classList.remove('hidden');
+            document.getElementById('hint-' + type).classList.remove('hidden');
+            formActions.classList.remove('hidden');
+            formActions.classList.add('flex');
+
+            // Re-init lucide icons untuk elemen yang baru muncul
+            lucide.createIcons();
+        }
+
+        function togglePassword() {
+            const input = document.getElementById('pppoePass');
+            const icon  = document.getElementById('eyeIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.setAttribute('data-lucide', 'eye-off');
+            } else {
+                input.type = 'password';
+                icon.setAttribute('data-lucide', 'eye');
+            }
+            lucide.createIcons();
+        }
+    </script>
+
+{% endblock %}

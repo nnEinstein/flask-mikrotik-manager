@@ -7,6 +7,17 @@
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Sembunyikan scrollbar untuk Chrome, Safari dan Opera */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        /* Sembunyikan scrollbar untuk IE, Edge dan Firefox */
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+    </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans antialiased">
     
@@ -35,7 +46,7 @@
     <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-20 hidden transition-opacity duration-300"></div>
 
     <!-- Sidebar Kiri -->
-    <aside id="sidebar" class="bg-slate-900 text-white w-64 fixed h-full z-30 top-0 left-0 pt-16 transform -translate-x-full transition-transform duration-300 ease-in-out shadow-2xl border-r border-gray-800">
+    <aside id="sidebar" class="bg-slate-900 text-white w-64 fixed z-30 top-0 left-0 pt-16 transform -translate-x-full transition-transform duration-300 ease-in-out shadow-2xl border-r border-gray-800 h-screen overflow-y-auto no-scrollbar pb-24">
         <div class="p-4">
             <ul class="space-y-2">
                 {% if 'connected_router_id' in session %}
@@ -75,6 +86,11 @@
                             <a href="{{ url_for('hotspot_active_list') }}" class="block px-4 py-2 text-xs font-semibold text-white rounded-lg hover:bg-gray-700 transition">Hotspot active</a>
                         </div>
                     </div>
+                    <li>
+                        <a href="#" class="flex items-center px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors font-medium text-white">
+                            <i data-lucide="plug-zap" class="w-5 h-5 mr-3 text-gray-400"></i> Uji Koneksi
+                        </a>
+                    </li>
                     <li class="pt-4 mt-4 border-t border-gray-700">
                         <a href="{{ url_for('disconnect_router') }}" class="flex items-center px-4 py-2.5 rounded-lg hover:bg-red-900/30 transition-colors font-medium text-red-400">
                             <i data-lucide="power-off" class="w-5 h-5 mr-3"></i> Disconnect Mikrotik
