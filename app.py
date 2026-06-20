@@ -19,6 +19,24 @@ class Router(db.Model):
     username = db.Column(db.String(50), nullable=False)
     password = db.Column(db.String(100), nullable=False)
 
+class LoadBalanceConfig(db.Model):
+    id              = db.Column(db.Integer, primary_key=True)
+    router_id       = db.Column(db.Integer, db.ForeignKey('router.id'), nullable=False)
+    pcc_mode        = db.Column(db.String(20), nullable=False)   # 'both' | 'src' | 'dst'
+    lan_network     = db.Column(db.String(50), nullable=False)
+    failover_enabled = db.Column(db.Boolean, default=True)
+
+    wans = db.relationship('WanEntry', backref='config', cascade='all, delete-orphan', order_by='WanEntry.priority')
+
+
+class WanEntry(db.Model):
+    id        = db.Column(db.Integer, primary_key=True)
+    config_id = db.Column(db.Integer, db.ForeignKey('load_balance_config.id'), nullable=False)
+    interface = db.Column(db.String(50), nullable=False)
+    gateway   = db.Column(db.String(50), nullable=False)
+    weight    = db.Column(db.Integer, default=1)
+    priority  = db.Column(db.Integer, nullable=False)  # urutan failover, 1 = utama
+
 with app.app_context():
     db.create_all()
 
@@ -434,6 +452,241 @@ def _setup_pppoe(api, interface, username, password, service, dns1, dns2):
             'servers': dns_servers,
             'allow-remote-requests': 'yes'
         })
+
+LB_TAG = 'AUTO-LB-EINSTEIN'  # penanda khusus supaya hanya rule milik fitur ini yang dihapus saat reset
+
+
+@app.route('/load-balance')
+@login_required
+@router_connected_required
+def load_balance():
+    api, connection = get_mikrotik_api()
+    interfaces = []
+    if api:
+        try:
+            interfaces = api.get_resource('/interface').get()
+        except Exception as e:
+            flash(f'Gagal memuat interface: {e}', 'danger')
+        finally:
+            connection.disconnect()
+    return render_template('load_balance.html', interfaces=interfaces)
+
+
+@app.route('/load-balance/save', methods=['POST'])
+@login_required
+@router_connected_required
+def save_load_balance():
+    wan_interfaces = request.form.getlist('wan_interface[]')
+    wan_gateways   = request.form.getlist('wan_gateway[]')
+    wan_weights    = request.form.getlist('wan_weight[]')
+    pcc_mode       = request.form.get('pcc_mode', 'both')
+    lan_network    = request.form.get('lan_network')
+    failover_on    = request.form.get('failover_enabled') == 'on'
+
+    if len(wan_interfaces) < 2:
+        flash('Minimal 2 WAN diperlukan untuk Load Balance.', 'danger')
+        return redirect(url_for('load_balance'))
+
+    if not lan_network:
+        flash('Local Network/LAN wajib diisi.', 'danger')
+        return redirect(url_for('load_balance'))
+
+    api, connection = get_mikrotik_api()
+    if not api:
+        flash('Koneksi ke router gagal.', 'danger')
+        return redirect(url_for('load_balance'))
+
+    router_id = session.get('connected_router_id')
+
+    try:
+        _reset_load_balance(api)
+        _apply_pcc(api, wan_interfaces, wan_gateways, wan_weights, pcc_mode, lan_network, failover_on)
+
+        # Hapus konfigurasi lama di DB untuk router ini (kalau ada), lalu simpan yang baru
+        old_config = LoadBalanceConfig.query.filter_by(router_id=router_id).first()
+        if old_config:
+            db.session.delete(old_config)
+            db.session.commit()
+
+        new_config = LoadBalanceConfig(
+            router_id=router_id,
+            pcc_mode=pcc_mode,
+            lan_network=lan_network,
+            failover_enabled=failover_on
+        )
+        db.session.add(new_config)
+        db.session.flush()  # supaya new_config.id terisi sebelum dipakai WanEntry
+
+        for i, (iface, gw, w) in enumerate(zip(wan_interfaces, wan_gateways, wan_weights)):
+            db.session.add(WanEntry(
+                config_id=new_config.id,
+                interface=iface,
+                gateway=gw,
+                weight=int(w) if w else 1,
+                priority=i + 1
+            ))
+        db.session.commit()
+
+        flash(f'Load Balance berhasil diterapkan untuk {len(wan_interfaces)} WAN!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Gagal menerapkan Load Balance: {e}', 'danger')
+    finally:
+        connection.disconnect()
+
+    return redirect(url_for('info_load_balance'))
+
+
+def _reset_load_balance(api):
+    """Hapus semua rule yang sebelumnya dibuat oleh fitur ini (ditandai via comment LB_TAG)."""
+    targets = [
+        ('/ip/firewall/mangle', api.get_resource('/ip/firewall/mangle')),
+        ('/ip/firewall/nat',    api.get_resource('/ip/firewall/nat')),
+        ('/ip/route',           api.get_resource('/ip/route')),
+    ]
+    for _, resource in targets:
+        for item in resource.get():
+            if item.get('comment', '').startswith(LB_TAG):
+                resource.remove(id=item.get('.id'))
+
+
+def _apply_pcc(api, interfaces, gateways, weights, pcc_mode, lan_network, failover_on):
+    mangle  = api.get_resource('/ip/firewall/mangle')
+    nat     = api.get_resource('/ip/firewall/nat')
+    route   = api.get_resource('/ip/route')
+
+    pcc_classifier = {
+        'both': 'both-addresses',
+        'src':  'src-address',
+        'dst':  'dst-address',
+    }.get(pcc_mode, 'both-addresses')
+
+    total_wan = len(interfaces)
+
+    for i, (iface, gw) in enumerate(zip(interfaces, gateways)):
+        wan_num    = i + 1
+        mark_conn  = f'wan{wan_num}-conn'
+        mark_route = f'wan{wan_num}-route'
+
+        # 1) Mangle: tandai koneksi baru dari LAN sesuai pembagian PCC
+        mangle.add(**{
+            'chain':            'prerouting',
+            'src-address':      lan_network,
+            'in-interface':     'all',
+            'connection-state': 'new',
+            'per-connection-classifier': f'{pcc_classifier}:{total_wan}/{i}',
+            'action':           'mark-connection',
+            'new-connection-mark': mark_conn,
+            'passthrough':      'yes',
+            'comment':          f'{LB_TAG} mangle-conn wan{wan_num}'
+        })
+
+        # 2) Mangle: tandai routing berdasarkan connection mark di atas
+        mangle.add(**{
+            'chain':                'prerouting',
+            'connection-mark':      mark_conn,
+            'action':               'mark-routing',
+            'new-routing-mark':     mark_route,
+            'passthrough':          'yes',
+            'comment':              f'{LB_TAG} mangle-route wan{wan_num}'
+        })
+
+        # 3) NAT: masquerade keluar lewat interface WAN ini
+        nat.add(**{
+            'chain':        'srcnat',
+            'out-interface': iface,
+            'action':       'masquerade',
+            'comment':      f'{LB_TAG} nat wan{wan_num}'
+        })
+
+        # 4) Route dengan routing-mark sesuai WAN, plus check-gateway untuk monitoring
+        route.add(**{
+            'dst-address':    '0.0.0.0/0',
+            'gateway':        gw,
+            'routing-mark':   mark_route,
+            'check-gateway':  'ping',
+            'distance':       '1',
+            'comment':        f'{LB_TAG} route wan{wan_num}'
+        })
+
+        # 5) Route failover: default route biasa, distance bertingkat sesuai urutan WAN
+        #    WAN pertama distance=1 (utama), WAN berikutnya distance lebih besar (cadangan)
+        if failover_on:
+            route.add(**{
+                'dst-address':   '0.0.0.0/0',
+                'gateway':       gw,
+                'check-gateway': 'ping',
+                'distance':      str(wan_num),
+                'comment':       f'{LB_TAG} failover wan{wan_num}'
+            })
+
+PCC_MODE_LABELS = {
+    'both': 'Source & Destination',
+    'src':  'Source Address',
+    'dst':  'Destination Address',
+}
+
+@app.route('/load-balance/info')
+@login_required
+@router_connected_required
+def info_load_balance():
+    router_id = session.get('connected_router_id')
+    config = LoadBalanceConfig.query.filter_by(router_id=router_id).first()
+
+    lb_config = None
+    if config:
+        # Ambil status interface terbaru dari MikroTik untuk ditampilkan di kolom Status
+        running_map = {}
+        api, connection = get_mikrotik_api()
+        if api:
+            try:
+                ifaces = api.get_resource('/interface').get()
+                running_map = {i.get('name'): i.get('running') == 'true' for i in ifaces}
+            except Exception:
+                pass
+            finally:
+                connection.disconnect()
+
+        wan_list = []
+        for wan in config.wans:
+            wan_list.append({
+                'interface': wan.interface,
+                'gateway':   wan.gateway,
+                'weight':    wan.weight,
+                'running':   running_map.get(wan.interface, False)
+            })
+
+        lb_config = {
+            'pcc_mode_label':   PCC_MODE_LABELS.get(config.pcc_mode, config.pcc_mode),
+            'lan_network':      config.lan_network,
+            'failover_enabled': config.failover_enabled,
+            'wan_list':         wan_list
+        }
+
+    return render_template('info_load_balance.html', lb_config=lb_config)
+
+@app.route('/load-balance/delete', methods=['POST'])
+@login_required
+@router_connected_required
+def delete_load_balance():
+    router_id = session.get('connected_router_id')
+
+    api, connection = get_mikrotik_api()
+    if api:
+        try:
+            _reset_load_balance(api)
+        except Exception as e:
+            flash(f'Gagal menghapus rule di router: {e}', 'danger')
+        finally:
+            connection.disconnect()
+
+    config = LoadBalanceConfig.query.filter_by(router_id=router_id).first()
+    if config:
+        db.session.delete(config)
+        db.session.commit()
+
+    flash('Konfigurasi Load Balance berhasil dihapus.', 'success')
+    return redirect(url_for('info_load_balance'))
 
 # ==========================================
 # HOTSPOT USER

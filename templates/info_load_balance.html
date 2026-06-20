@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Load Balance - EINSTEIN{% endblock %}
+{% block content %}
+
+    <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-1">Load Balance</h2>
+            <p class="text-sm text-gray-500">Status pembagian beban (PCC) dan failover antar WAN.</p>
+        </div>
+        {% if lb_config %}
+        <div class="flex items-center gap-2">
+            <a href="{{ url_for('load_balance') }}" class="inline-flex items-center justify-center px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-lg transition shadow-sm">
+                <i data-lucide="settings-2" class="w-4 h-4 mr-2"></i> Reconfigure
+            </a>
+            <button type="button" onclick="openDeleteLbModal()" class="inline-flex items-center justify-center px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-semibold rounded-lg transition shadow-sm">
+                <i data-lucide="trash-2" class="w-4 h-4 mr-2"></i> Hapus
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if not lb_config %}
+    <!-- ============ EMPTY STATE ============ -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-12 flex flex-col items-center text-center">
+        <div class="p-4 bg-gray-50 rounded-full mb-4">
+            <i data-lucide="layers" class="w-8 h-8 text-gray-300"></i>
+        </div>
+        <h3 class="font-bold text-gray-800 mb-1">Belum Ada Konfigurasi Load Balance</h3>
+        <p class="text-sm text-gray-400 mb-6 max-w-sm">Atur pembagian beban antar WAN dengan metode PCC, lengkap dengan failover otomatis jika salah satu WAN terputus.</p>
+        <a href="{{ url_for('load_balance') }}" class="inline-flex items-center px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-lg transition shadow-sm">
+            <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Tambahkan Konfigurasi Load Balance
+        </a>
+    </div>
+
+    {% else %}
+    <!-- ============ CONFIGURED STATE ============ -->
+
+    <!-- Ringkasan -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-center gap-3">
+            <div class="p-2.5 bg-blue-50 text-blue-600 rounded-lg">
+                <i data-lucide="layers" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <span class="text-xs text-gray-400 block font-medium uppercase tracking-wider">Jumlah WAN</span>
+                <span class="text-xl font-bold text-gray-900">{{ lb_config.wan_list | length }} Interface</span>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-center gap-3">
+            <div class="p-2.5 bg-purple-50 text-purple-600 rounded-lg">
+                <i data-lucide="shuffle" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <span class="text-xs text-gray-400 block font-medium uppercase tracking-wider">Mode PCC</span>
+                <span class="text-base font-bold text-gray-900">{{ lb_config.pcc_mode_label }}</span>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-center gap-3">
+            <div class="p-2.5 {% if lb_config.failover_enabled %}bg-emerald-50 text-emerald-600{% else %}bg-gray-100 text-gray-400{% endif %} rounded-lg">
+                <i data-lucide="shield-check" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <span class="text-xs text-gray-400 block font-medium uppercase tracking-wider">Failover</span>
+                <span class="text-base font-bold {% if lb_config.failover_enabled %}text-emerald-600{% else %}text-gray-400{% endif %}">
+                    {{ 'Aktif' if lb_config.failover_enabled else 'Nonaktif' }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info LAN -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 mb-6 flex items-center gap-3">
+        <div class="p-2.5 bg-gray-50 text-gray-500 rounded-lg">
+            <i data-lucide="network" class="w-5 h-5"></i>
+        </div>
+        <div>
+            <span class="text-xs text-gray-400 block font-medium uppercase tracking-wider">Local Network / LAN</span>
+            <span class="text-sm font-mono font-semibold text-gray-800">{{ lb_config.lan_network }}</span>
+        </div>
+    </div>
+
+    <!-- Detail per WAN -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100">
+            <h3 class="font-bold text-gray-800 text-sm">Detail Konfigurasi WAN</h3>
+            <p class="text-xs text-gray-400 mt-0.5">Urutan menunjukkan prioritas failover, dari atas (utama) ke bawah (cadangan).</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        <th class="py-3.5 px-6">Prioritas</th>
+                        <th class="py-3.5 px-6">Interface</th>
+                        <th class="py-3.5 px-6">Gateway</th>
+                        <th class="py-3.5 px-6">Weight</th>
+                        <th class="py-3.5 px-6">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50 text-sm text-gray-700">
+                    {% for wan in lb_config.wan_list %}
+                    <tr class="hover:bg-gray-50/70 transition-colors">
+                        <td class="py-3.5 px-6">
+                            <span class="px-2 py-0.5 rounded text-xs font-semibold {% if loop.index == 1 %}bg-blue-50 text-blue-600{% else %}bg-gray-100 text-gray-500{% endif %}">
+                                {% if loop.index == 1 %}Utama{% else %}Cadangan {{ loop.index - 1 }}{% endif %}
+                            </span>
+                        </td>
+                        <td class="py-3.5 px-6 font-bold text-gray-900">{{ wan.interface }}</td>
+                        <td class="py-3.5 px-6 font-mono text-xs text-gray-600">{{ wan.gateway }}</td>
+                        <td class="py-3.5 px-6 text-gray-600">{{ wan.weight }}</td>
+                        <td class="py-3.5 px-6">
+                            <span class="px-2 py-0.5 rounded text-xs font-semibold {% if wan.running %}text-emerald-600 bg-emerald-50{% else %}text-red-600 bg-red-50{% endif %}">
+                                {{ 'Running' if wan.running else 'Down' }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal Konfirmasi Hapus -->
+    <div id="deleteLbModal" class="hidden fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl border border-gray-100 max-w-sm w-full p-5">
+            <div class="flex items-center space-x-3 text-red-600 mb-3">
+                <div class="p-2 bg-red-50 rounded-full">
+                    <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800">Hapus Konfigurasi Load Balance</h3>
+            </div>
+            <p class="text-sm text-gray-600 mb-5 leading-relaxed">
+                Semua rule mangle, NAT, dan route yang dibuat oleh fitur ini akan dihapus. Konfigurasi router lain yang tidak terkait tidak akan terpengaruh.
+            </p>
+            <form action="{{ url_for('delete_load_balance') }}" method="POST" class="flex justify-end space-x-2">
+                <button type="button" onclick="closeDeleteLbModal()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition">
+                    Batal
+                </button>
+                <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition shadow-sm">
+                    Ya, Hapus
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openDeleteLbModal() {
+            document.getElementById('deleteLbModal').classList.remove('hidden');
+        }
+        function closeDeleteLbModal() {
+            document.getElementById('deleteLbModal').classList.add('hidden');
+        }
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeDeleteLbModal();
+        });
+    </script>
+
+    {% endif %}
+
+{% endblock %}

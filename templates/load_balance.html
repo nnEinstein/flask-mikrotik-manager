@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}Load Balance - EINSTEIN{% endblock %}
+{% block content %}
+
+    <div class="mb-6">
+        <h2 class="text-2xl font-bold text-gray-800 mb-1">Load Balance</h2>
+        <p class="text-sm text-gray-500">Konfigurasi pembagian beban (PCC) antar WAN beserta failover otomatis.</p>
+    </div>
+
+    <div class="bg-amber-50 border border-amber-100 rounded-xl p-4 mb-6 flex items-start gap-3">
+        <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600 mt-0.5 shrink-0"></i>
+        <div class="text-sm text-amber-800 leading-relaxed">
+            <p class="font-semibold mb-1">Pastikan WAN sudah terhubung ke internet terlebih dahulu</p>
+            <p class="text-xs text-amber-700">
+                Gunakan menu <a href="{{ url_for('connect_internet') }}" class="font-semibold underline hover:text-amber-900">Hubungkan Internet</a>
+                untuk setiap interface WAN (DHCP / Static / PPPoE) sebelum mengatur Load Balance.
+                Jika interface belum mendapatkan IP dari ISP, pembagian beban tidak akan berfungsi meskipun konfigurasi berhasil disimpan.
+            </p>
+        </div>
+    </div>
+
+    <form id="lbForm" action="{{ url_for('save_load_balance') }}" method="POST">
+
+        <!-- Daftar WAN -->
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-6">
+            <div class="flex items-center justify-between mb-5">
+                <div>
+                    <h3 class="font-bold text-gray-800">Daftar WAN</h3>
+                    <p class="text-xs text-gray-400 mt-0.5">Tambahkan minimal 2 WAN. Urutan menentukan prioritas failover.</p>
+                </div>
+                <button type="button" onclick="addWanRow()" class="px-3 py-2 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1.5">
+                    <i data-lucide="plus" class="w-3.5 h-3.5"></i> Tambah WAN
+                </button>
+            </div>
+
+            <div id="wanContainer" class="space-y-3"></div>
+
+            <p id="wanLimitNote" class="hidden text-xs text-amber-600 mt-3 flex items-center gap-1.5">
+                <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> Maksimal 4 WAN didukung saat ini.
+            </p>
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-6">
+
+            <!-- Pengaturan PCC -->
+            <div class="lg:w-1/2 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+                <div class="flex items-center text-gray-700 mb-4">
+                    <i data-lucide="shuffle" class="w-5 h-5 mr-2"></i>
+                    <h3 class="font-bold text-sm">Pengaturan PCC</h3>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Mode Distribusi</label>
+                        <select name="pcc_mode" class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition cursor-pointer">
+                            <option value="both" selected>Source & Destination Address</option>
+                            <option value="src">Source Address Saja</option>
+                            <option value="dst">Destination Address Saja</option>
+                        </select>
+                        <p class="text-xs text-gray-400 mt-1.5">Menentukan bagaimana traffic dikelompokkan dan dibagi rata ke tiap WAN.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Local Network / LAN <span class="text-red-500">*</span></label>
+                        <input type="text" name="lan_network" placeholder="Contoh: 192.168.10.0/24" required
+                               class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                        <p class="text-xs text-gray-400 mt-1.5">Subnet jaringan lokal yang akan di-load balance.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pengaturan Failover -->
+            <div class="lg:w-1/2 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+                <div class="flex items-center text-gray-700 mb-4">
+                    <i data-lucide="shield-check" class="w-5 h-5 mr-2"></i>
+                    <h3 class="font-bold text-sm">Pengaturan Failover</h3>
+                </div>
+
+                <div class="space-y-4">
+                    <label class="flex items-center gap-2.5 cursor-pointer">
+                        <input type="checkbox" name="failover_enabled" id="failoverToggle" checked
+                               class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        <span class="text-sm text-gray-700 font-medium">Aktifkan Failover Otomatis</span>
+                    </label>
+                    <p class="text-xs text-gray-400 -mt-2 ml-6">Jika salah satu WAN terputus, traffic otomatis dialihkan ke WAN yang masih aktif sesuai urutan prioritas.</p>
+
+                    <div id="failoverDetail" class="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                        <div class="flex items-start gap-2.5 text-xs text-blue-800 leading-relaxed">
+                            <i data-lucide="info" class="w-4 h-4 mt-0.5 shrink-0"></i>
+                            <span>Status hidup/mati tiap WAN dipantau lewat fitur <b>Uji Koneksi</b>. Urutan WAN pada daftar di atas (dari atas ke bawah) menjadi urutan prioritas failover.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="flex items-center space-x-3 pt-2 mt-6">
+            <button type="submit" class="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm flex items-center">
+                <i data-lucide="save" class="w-4 h-4 mr-2"></i> Simpan & Terapkan
+            </button>
+            <a href="{{ url_for('info_load_balance') }}" class="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg transition-colors text-center">
+                Cancel
+            </a>
+        </div>
+
+    </form>
+
+    <!-- Template baris WAN (disembunyikan, dipakai oleh JS) -->
+    <template id="wanRowTemplate">
+        <div class="wan-row bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-3">
+                <span class="wan-label text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                    <i data-lucide="grip-vertical" class="w-3.5 h-3.5 text-gray-300"></i> WAN
+                </span>
+                <button type="button" onclick="removeWanRow(this)" class="text-gray-400 hover:text-red-500 transition">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                    <label class="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Interface</label>
+                    <select name="wan_interface[]" required
+                            class="w-full bg-white text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 py-2 px-2.5 transition cursor-pointer">
+                        <option value="">-- Pilih Interface --</option>
+                        {% for iface in interfaces %}
+                        <option value="{{ iface.name }}">{{ iface.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Gateway</label>
+                    <input type="text" name="wan_gateway[]" placeholder="Contoh: 192.168.1.1" required
+                           class="w-full bg-white text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 py-2 px-2.5 transition">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Bobot (Weight)</label>
+                    <input type="number" name="wan_weight[]" min="1" value="1"
+                           class="w-full bg-white text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 py-2 px-2.5 transition">
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script>
+        const MAX_WAN = 4;
+        const MIN_WAN = 2;
+        let wanCount = 0;
+
+        function relabelRows() {
+            const rows = document.querySelectorAll('#wanContainer .wan-row');
+            rows.forEach((row, i) => {
+                row.querySelector('.wan-label').innerHTML =
+                    `<i data-lucide="grip-vertical" class="w-3.5 h-3.5 text-gray-300"></i> WAN ${i + 1} ${i === 0 ? '<span class="text-blue-500">(Prioritas Utama)</span>' : ''}`;
+            });
+            lucide.createIcons();
+            document.getElementById('wanLimitNote').classList.toggle('hidden', wanCount < MAX_WAN);
+        }
+
+        function addWanRow() {
+            if (wanCount >= MAX_WAN) return;
+            const template = document.getElementById('wanRowTemplate');
+            const clone = template.content.cloneNode(true);
+            document.getElementById('wanContainer').appendChild(clone);
+            wanCount++;
+            relabelRows();
+        }
+
+        function removeWanRow(btn) {
+            if (wanCount <= MIN_WAN) return;
+            btn.closest('.wan-row').remove();
+            wanCount--;
+            relabelRows();
+        }
+
+        // Inisialisasi 2 WAN default saat halaman dibuka
+        document.addEventListener('DOMContentLoaded', () => {
+            addWanRow();
+            addWanRow();
+        });
+
+        // Toggle tampilan detail failover
+        document.getElementById('failoverToggle').addEventListener('change', function() {
+            document.getElementById('failoverDetail').classList.toggle('opacity-40', !this.checked);
+        });
+
+        // Validasi sebelum submit
+        document.getElementById('lbForm').addEventListener('submit', function(e) {
+            if (wanCount < MIN_WAN) {
+                e.preventDefault();
+                alert('Minimal 2 WAN diperlukan untuk Load Balance.');
+            }
+        });
+    </script>
+
+{% endblock %}
