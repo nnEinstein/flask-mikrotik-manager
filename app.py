@@ -1167,14 +1167,16 @@ def tandai_lunas():
             api, connection = get_mikrotik_api()
             if api:
                 try:
-                    secrets = api.get_resource('/ppp/secret').get()
+                    secrets = list(api.get_resource('/ppp/secret').get())
                     for s in secrets:
                         if s.get('name') == customer.username:
-                            api.get_resource('/ppp/secret').set(
-                                id=s.get('.id'),
-                                profile=customer.profile.nama,
-                                disabled='no'
-                            )
+                            mikrotik_id = s.get('.id') or s.get('id')
+                            if mikrotik_id:
+                                api.get_resource('/ppp/secret').set(
+                                    id=mikrotik_id,
+                                    profile=customer.profile.nama,
+                                    disabled='no'
+                                )
                             break
                 except Exception as e:
                     flash(f'Pembayaran tersimpan, tapi gagal sinkron ke router: {e}', 'danger')
@@ -1209,10 +1211,12 @@ def hapus_pelanggan():
     api, connection = get_mikrotik_api()
     if api:
         try:
-            secrets = api.get_resource('/ppp/secret').get()
+            secrets = list(api.get_resource('/ppp/secret').get())
             for s in secrets:
                 if s.get('name') == customer.username:
-                    api.get_resource('/ppp/secret').remove(id=s.get('.id'))
+                    mikrotik_id = s.get('.id') or s.get('id')
+                    if mikrotik_id:
+                        api.get_resource('/ppp/secret').remove(id=mikrotik_id)
                     break
         except Exception as e:
             flash(f'Gagal menghapus akun di router: {e}', 'danger')
@@ -1274,7 +1278,7 @@ def tambah_pelanggan():
 
         try:
             # Cek juga di MikroTik, jaga-jaga kalau ada secret manual dengan nama sama
-            existing_secrets = api.get_resource('/ppp/secret').get()
+            existing_secrets = list(api.get_resource('/ppp/secret').get())
             if any(s.get('name') == username for s in existing_secrets):
                 flash(f"Username '{username}' sudah terdaftar di router. Gunakan username lain.", 'danger')
                 return redirect(url_for('tambah_pelanggan'))
@@ -1374,11 +1378,11 @@ def edit_pelanggan(id):
             return redirect(url_for('edit_pelanggan', id=id))
 
         try:
-            secrets = api.get_resource('/ppp/secret').get()
+            secrets = list(api.get_resource('/ppp/secret').get())
             mikrotik_id = None
             for s in secrets:
                 if s.get('name') == customer.username:
-                    mikrotik_id = s.get('.id')
+                    mikrotik_id = s.get('.id') or s.get('id')
                     break
 
             if not mikrotik_id:
@@ -1543,23 +1547,31 @@ def edit_pppoe_profile(id):
             return redirect(url_for('edit_pppoe_profile', id=id))
 
         try:
-            existing_profiles = api.get_resource('/ppp/profile').get()
+            existing_profiles = list(api.get_resource('/ppp/profile').get())
+            
             mikrotik_id = None
             for mp in existing_profiles:
+                mp_id = mp.get('.id') or mp.get('id')
                 if mp.get('name') == profile.nama:
-                    mikrotik_id = mp.get('.id')
+                    mikrotik_id = mp_id
                     break
 
-            if not mikrotik_id:
-                flash(f"Profile '{profile.nama}' tidak ditemukan di router. Mungkin sudah dihapus manual, sehingga tidak bisa diperbarui.", 'danger')
-                return redirect(url_for('edit_pppoe_profile', id=id))
-
-            update_data = {'.id': mikrotik_id, 'name': nama}
-            update_data['rate-limit']     = rate_limit   if rate_limit   else ''
-            update_data['local-address']  = local_address if local_address else ''
-            update_data['remote-address'] = remote_pool   if remote_pool   else ''
-
-            api.get_resource('/ppp/profile').set(**update_data)
+            if mikrotik_id:
+                update_data = {'.id': mikrotik_id, 'name': nama}
+                update_data['rate-limit']     = rate_limit   if rate_limit   else ''
+                update_data['local-address']  = local_address if local_address else ''
+                update_data['remote-address'] = remote_pool   if remote_pool   else ''
+                api.get_resource('/ppp/profile').set(**update_data)
+            else:
+                create_data = {'name': nama}
+                if rate_limit:
+                    create_data['rate-limit'] = rate_limit
+                if local_address:
+                    create_data['local-address'] = local_address
+                if remote_pool:
+                    create_data['remote-address'] = remote_pool
+                api.get_resource('/ppp/profile').add(**create_data)
+                flash(f"Catatan: profile '{profile.nama}' sebelumnya tidak ada di router, sekarang sudah dibuat ulang sebagai '{nama}'.", 'success')
 
         except Exception as e:
             flash(f'Gagal memperbarui profile di router: {e}', 'danger')
@@ -1619,19 +1631,31 @@ def hapus_pppoe_profile():
         flash(f"Profile '{profile.nama}' tidak bisa dihapus karena masih digunakan oleh {pelanggan_pakai} pelanggan.", 'danger')
         return redirect(url_for('pppoe_profile_list'))
 
-    # Hapus dari MikroTik dulu
+    # Hapus dari MikroTik dulu — wajib berhasil, kalau gagal jangan lanjut hapus database
     api, connection = get_mikrotik_api()
-    if api:
-        try:
-            existing_profiles = api.get_resource('/ppp/profile').get()
-            for mp in existing_profiles:
-                if mp.get('name') == profile.nama:
-                    api.get_resource('/ppp/profile').remove(id=mp.get('.id'))
-                    break
-        except Exception as e:
-            flash(f'Gagal menghapus profile di router: {e}', 'danger')
-        finally:
-            connection.disconnect()
+    if not api:
+        flash('Koneksi ke router gagal.', 'danger')
+        return redirect(url_for('pppoe_profile_list'))
+
+    try:
+        existing_profiles = list(api.get_resource('/ppp/profile').get())
+        
+        mikrotik_id = None
+        for mp in existing_profiles:
+            if mp.get('name') == profile.nama:
+                mikrotik_id = mp.get('.id') or mp.get('id')
+                break
+
+        if mikrotik_id:
+            api.get_resource('/ppp/profile').remove(id=mikrotik_id)
+        else:
+            flash(f"Catatan: profile '{profile.nama}' tidak ditemukan di router (mungkin sudah terhapus sebelumnya). Data di aplikasi tetap akan dihapus.", 'success')
+
+    except Exception as e:
+        flash(f'Gagal menghapus profile di router: {e}', 'danger')
+        return redirect(url_for('pppoe_profile_list'))
+    finally:
+        connection.disconnect()
 
     try:
         db.session.delete(profile)
@@ -1639,9 +1663,23 @@ def hapus_pppoe_profile():
         flash(f"Profile '{profile.nama}' berhasil dihapus.", 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Gagal menghapus profile dari database: {e}', 'danger')
+        flash(f'Profile sudah dihapus di router, tapi gagal dihapus dari database: {e}', 'danger')
 
     return redirect(url_for('pppoe_profile_list'))
+
+@app.route('/pppoe/riwayat-pembayaran')
+@login_required
+@router_connected_required
+def riwayat_pembayaran():
+    router_id = session.get('connected_router_id')
+
+    payments = PPPoEPayment.query.join(PPPoECustomer).filter(
+        PPPoECustomer.router_id == router_id
+    ).order_by(PPPoEPayment.tanggal_bayar.desc()).all()
+
+    total_income = sum(p.jumlah_bayar for p in payments)
+
+    return render_template('PPPoE/riwayat_pembayaran.html', payments=payments, total_income=total_income)
 
 # ==========================================
 # UJI KONEKSI

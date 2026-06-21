@@ -7,6 +7,18 @@
         <p class="text-sm text-gray-500">Daftarkan pelanggan baru beserta akun PPPoE dan paket langganannya.</p>
     </div>
 
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="space-y-3 mb-6">
+        {% for category, message in messages %}
+        <div class="px-5 py-3.5 rounded-xl text-sm font-medium border-l-4 {% if category == 'success' %} bg-emerald-50 text-emerald-700 border-emerald-500 {% else %} bg-red-50 text-red-700 border-red-500 {% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
     <div class="flex flex-col lg:flex-row gap-6">
 
         <div class="lg:w-2/3 bg-white rounded-xl border border-gray-100 shadow-sm p-6">

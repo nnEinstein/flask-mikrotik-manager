@@ -13,6 +13,16 @@
     </a>
 </div>
 
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="px-5 py-3.5 rounded-xl text-sm font-medium border-l-4 mb-4 {% if category == 'success' %} bg-emerald-50 text-emerald-700 border-emerald-500 {% else %} bg-red-50 text-red-700 border-red-500 {% endif %}">
+          {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
     {% if routers %}
         {% for router in routers %}

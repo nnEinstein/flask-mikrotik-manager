@@ -7,6 +7,18 @@
         <p class="text-sm text-gray-500">Ringkasan pelanggan, pemasukan, dan status tagihan bulanan.</p>
     </div>
 
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="space-y-3 mb-6">
+        {% for category, message in messages %}
+        <div class="px-5 py-3.5 rounded-xl text-sm font-medium border-l-4 {% if category == 'success' %} bg-emerald-50 text-emerald-700 border-emerald-500 {% else %} bg-red-50 text-red-700 border-red-500 {% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
     <!-- Kartu Ringkasan -->
     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
 
