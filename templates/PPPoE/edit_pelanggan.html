@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Edit Pelanggan PPPoE - EINSTEIN{% endblock %}
+{% block content %}
+
+    <div class="mb-6">
+        <h2 class="text-2xl font-bold text-gray-800 mb-1">Edit Pelanggan PPPoE</h2>
+        <p class="text-sm text-gray-500">Perbarui data pelanggan, akun PPPoE, dan paket langganan.</p>
+    </div>
+
+    <div class="flex flex-col lg:flex-row gap-6">
+
+        <div class="lg:w-2/3 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+            <form action="{{ url_for('edit_pelanggan', id=customer.id) }}" method="POST">
+
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Data Pelanggan</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Nama Pelanggan <span class="text-red-500">*</span></label>
+                        <input type="text" name="nama_pelanggan" required value="{{ customer.nama_pelanggan }}"
+                               class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">No. HP</label>
+                        <input type="text" name="no_hp" value="{{ customer.no_hp or '' }}"
+                               class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Alamat</label>
+                        <input type="text" name="alamat" value="{{ customer.alamat or '' }}"
+                               class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                    </div>
+                </div>
+
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 pt-2 border-t border-gray-100">Akun PPPoE</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Username <span class="text-red-500">*</span></label>
+                        <input type="text" name="username" id="username" required value="{{ customer.username }}"
+                               class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                        <p class="text-xs text-amber-600 mt-1.5">Mengubah username akan memutus koneksi pelanggan sampai login ulang dengan username baru.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Password Baru</label>
+                        <div class="relative">
+                            <input type="password" name="password" id="password" placeholder="Kosongkan jika tidak ingin mengubah"
+                                   class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 pr-16 transition">
+                            <button type="button" onclick="togglePassword()" class="absolute right-9 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                <i data-lucide="eye" id="eyeIcon" class="w-4 h-4"></i>
+                            </button>
+                            <button type="button" onclick="generatePassword()" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600" title="Generate password acak">
+                                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1.5">Biarkan kosong agar password lama tetap dipakai.</p>
+                    </div>
+                </div>
+
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 pt-2 border-t border-gray-100">Paket & Langganan</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Profile PPPoE <span class="text-red-500">*</span></label>
+                        <select name="profile_id" required
+                                class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition cursor-pointer">
+                            {% for p in profiles %}
+                            <option value="{{ p.id }}" {% if customer.profile_id == p.id %}selected{% endif %}>{{ p.nama }} — Rp {{ '{:,.0f}'.format(p.harga_bulanan).replace(',', '.') }}/bln</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Tanggal Jatuh Tempo</label>
+                        <input type="date" name="tanggal_jatuh_tempo" value="{{ customer.tanggal_jatuh_tempo.strftime('%Y-%m-%d') }}"
+                               class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Status</label>
+                        <select name="status" class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition cursor-pointer">
+                            <option value="active" {% if customer.status == 'active' %}selected{% endif %}>Aktif</option>
+                            <option value="isolated" {% if customer.status == 'isolated' %}selected{% endif %}>Isolir</option>
+                        </select>
+                        <p class="text-xs text-gray-400 mt-1.5">Mengubah status secara manual akan langsung diterapkan ke router.</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-3 pt-4 border-t border-gray-100 mt-2">
+                    <button type="submit" class="px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm flex items-center">
+                        <i data-lucide="check-circle" class="w-4 h-4 mr-2"></i> Update Pelanggan
+                    </button>
+                    <a href="{{ url_for('daftar_pelanggan') }}" class="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg transition-colors text-center">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <div class="lg:w-1/3 space-y-4">
+            <div class="bg-amber-50 rounded-xl p-5 border border-amber-100">
+                <div class="flex items-center text-amber-700 mb-2">
+                    <i data-lucide="alert-triangle" class="w-5 h-5 mr-2"></i>
+                    <h3 class="font-bold text-sm">Perhatian</h3>
+                </div>
+                <p class="text-xs text-amber-800 leading-relaxed">
+                    Username dan password yang diubah di sini akan langsung disinkronkan ke akun PPPoE pelanggan di router. Pastikan pelanggan diberi tahu jika kredensial login berubah.
+                </p>
+            </div>
+
+            <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+                <div class="flex items-center text-gray-700 mb-2">
+                    <i data-lucide="info" class="w-5 h-5 mr-2"></i>
+                    <h3 class="font-bold text-sm">Riwayat Pembayaran</h3>
+                </div>
+                <p class="text-xs text-gray-600 leading-relaxed">
+                    Mengubah tanggal jatuh tempo di sini tidak membuat catatan pembayaran baru. Untuk mencatat pembayaran, gunakan tombol <b>Tandai Lunas</b> di halaman Daftar Pelanggan.
+                </p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function generatePassword() {
+            const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let pass = '';
+            for (let i = 0; i < 8; i++) {
+                pass += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            document.getElementById('password').value = pass;
+            document.getElementById('password').type = 'text';
+            document.getElementById('eyeIcon').setAttribute('data-lucide', 'eye-off');
+            lucide.createIcons();
+        }
+
+        function togglePassword() {
+            const input = document.getElementById('password');
+            const icon  = document.getElementById('eyeIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.setAttribute('data-lucide', 'eye-off');
+            } else {
+                input.type = 'password';
+                icon.setAttribute('data-lucide', 'eye');
+            }
+            lucide.createIcons();
+        }
+    </script>
+
+{% endblock %}

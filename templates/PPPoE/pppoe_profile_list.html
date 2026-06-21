@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Profile PPPoE - EINSTEIN{% endblock %}
+{% block content %}
+
+    <div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-1">Profile PPPoE</h2>
+            <p class="text-sm text-gray-500">Daftar paket layanan, batasan kecepatan, dan harga bulanan PPPoE.</p>
+        </div>
+        <a href="{{ url_for('tambah_pppoe_profile') }}" class="inline-flex items-center justify-center px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold rounded-lg transition shadow-sm self-start sm:self-center">
+            <i data-lucide="plus" class="w-4 h-4 mr-2"></i> Tambah Profile
+        </a>
+    </div>
+
+    <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm mb-6 flex items-center space-x-3">
+        <div class="p-2 bg-blue-50 text-blue-600 rounded-lg">
+            <i data-lucide="layers" class="w-5 h-5"></i>
+        </div>
+        <div>
+            <span class="text-xs text-gray-400 block font-medium uppercase tracking-wider">Total Profile PPPoE</span>
+            <span class="text-xl font-bold text-gray-900">{{ profiles | length | default('0') }} Profile Terdaftar</span>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        <th class="py-3.5 px-6">No</th>
+                        <th class="py-3.5 px-6">Nama Profile</th>
+                        <th class="py-3.5 px-6">Rate Limit</th>
+                        <th class="py-3.5 px-6">Local Address</th>
+                        <th class="py-3.5 px-6">Remote Pool</th>
+                        <th class="py-3.5 px-6">Harga / Bulan</th>
+                        <th class="py-3.5 px-6 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50 text-sm text-gray-700">
+                    {% for p in profiles %}
+                    <tr class="hover:bg-gray-50/70 transition-colors">
+                        <td class="py-3.5 px-6 font-medium text-gray-400">{{ loop.index }}</td>
+                        <td class="py-3.5 px-6 font-bold text-gray-900">{{ p.nama }}</td>
+                        <td class="py-3.5 px-6 font-mono text-xs text-blue-600 font-semibold">{{ p.rate_limit or '-' }}</td>
+                        <td class="py-3.5 px-6 font-mono text-xs text-gray-600">{{ p.local_address or '-' }}</td>
+                        <td class="py-3.5 px-6 font-mono text-xs text-gray-600">{{ p.remote_pool or '-' }}</td>
+                        <td class="py-3.5 px-6 font-bold text-emerald-600">Rp {{ '{:,.0f}'.format(p.harga_bulanan).replace(',', '.') }}</td>
+
+                        <td class="py-3.5 px-6 text-center">
+                            <div class="flex items-center justify-center gap-1.5">
+                                <a href="{{ url_for('edit_pppoe_profile', id=p.id) }}"
+                                   class="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors shadow-sm" title="Edit Profile">
+                                    <i data-lucide="edit-2" class="w-4 h-4"></i>
+                                </a>
+                                <button type="button"
+                                        data-id="{{ p.id }}"
+                                        data-name="{{ p.nama }}"
+                                        onclick="openDeleteModal(this.getAttribute('data-id'), this.getAttribute('data-name'))"
+                                        class="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors shadow-sm" title="Hapus Profile">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-gray-400">
+                            <div class="flex flex-col items-center justify-center space-y-2">
+                                <i data-lucide="layers-2" class="w-8 h-8 text-gray-300"></i>
+                                <span class="text-sm">Belum ada profile PPPoE terdaftar.</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal Hapus Profile -->
+    <div id="deleteModal" class="hidden fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl border border-gray-100 max-w-sm w-full p-5">
+            <div class="flex items-center space-x-3 text-red-600 mb-3">
+                <div class="p-2 bg-red-50 rounded-full">
+                    <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800">Hapus Profile PPPoE</h3>
+            </div>
+
+            <p id="deleteMessage" class="text-sm text-gray-600 mb-5 leading-relaxed">
+                Apakah Anda yakin ingin menghapus profile ini?
+            </p>
+
+            <form action="{{ url_for('hapus_pppoe_profile') }}" method="POST" class="flex justify-end space-x-2">
+                <input type="hidden" name="id" id="deleteProfileId">
+                <button type="button" onclick="closeDeleteModal()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition">
+                    Batal
+                </button>
+                <button type="submit" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition shadow-sm">
+                    Ya, Hapus
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openDeleteModal(id, name) {
+            document.getElementById('deleteProfileId').value = id;
+            document.getElementById('deleteMessage').innerHTML = `Apakah Anda yakin ingin menghapus profile <b>${name}</b>? Pastikan tidak ada pelanggan yang masih menggunakan profile ini.`;
+            document.getElementById('deleteModal').classList.remove('hidden');
+        }
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').classList.add('hidden');
+        }
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeDeleteModal();
+        });
+    </script>
+
+{% endblock %}

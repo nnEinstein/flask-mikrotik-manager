@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}Dashboard PPPoE - EINSTEIN{% endblock %}
+{% block content %}
+
+    <div class="mb-6">
+        <h2 class="text-2xl font-bold text-gray-800 mb-1">Dashboard PPPoE</h2>
+        <p class="text-sm text-gray-500">Ringkasan pelanggan, pemasukan, dan status tagihan bulanan.</p>
+    </div>
+
+    <!-- Kartu Ringkasan -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+            <div class="p-3 bg-blue-50 text-blue-600 rounded-lg">
+                <i data-lucide="users" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <span class="text-xs text-gray-400 block font-medium uppercase tracking-wider">Total Pelanggan</span>
+                <span class="text-2xl font-bold text-gray-900">{{ stats.total_customers | default(0) }}</span>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+            <div class="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
+                <i data-lucide="check-circle" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <span class="text-xs text-gray-400 block font-medium uppercase tracking-wider">Pelanggan Aktif</span>
+                <span class="text-2xl font-bold text-gray-900">{{ stats.active_customers | default(0) }}</span>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+            <div class="p-3 bg-red-50 text-red-600 rounded-lg">
+                <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <span class="text-xs text-gray-400 block font-medium uppercase tracking-wider">Nunggak / Isolir</span>
+                <span class="text-2xl font-bold text-gray-900">{{ stats.isolated_customers | default(0) }}</span>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+            <div class="p-3 bg-amber-50 text-amber-600 rounded-lg">
+                <i data-lucide="wallet" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <span class="text-xs text-gray-400 block font-medium uppercase tracking-wider">Pemasukan Bulan Ini</span>
+                <span class="text-2xl font-bold text-gray-900">Rp {{ '{:,.0f}'.format(stats.income_this_month | default(0)).replace(',', '.') }}</span>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="flex flex-col lg:flex-row gap-6 mb-6">
+
+        <!-- Grafik Pemasukan -->
+        <div class="lg:w-3/5 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h3 class="font-bold text-gray-800 text-sm">Pemasukan 6 Bulan Terakhir</h3>
+                    <p class="text-xs text-gray-400 mt-0.5">Total pembayaran pelanggan PPPoE per bulan.</p>
+                </div>
+                <div class="p-2 bg-gray-50 rounded-lg">
+                    <i data-lucide="trending-up" class="w-4 h-4 text-gray-400"></i>
+                </div>
+            </div>
+            <div class="h-64">
+                <canvas id="incomeChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Ringkasan Status -->
+        <div class="lg:w-2/5 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+            <h3 class="font-bold text-gray-800 text-sm mb-1">Komposisi Status Pelanggan</h3>
+            <p class="text-xs text-gray-400 mb-4">Distribusi status seluruh pelanggan saat ini.</p>
+            <div class="h-64 flex items-center justify-center">
+                <canvas id="statusChart"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Tabel Pelanggan Nunggak / Akan Jatuh Tempo -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div>
+                <h3 class="font-bold text-gray-800 text-sm">Perlu Perhatian</h3>
+                <p class="text-xs text-gray-400 mt-0.5">Pelanggan yang nunggak atau jatuh tempo dalam 3 hari ke depan.</p>
+            </div>
+            <a href="#" class="text-xs font-semibold text-blue-600 hover:text-blue-700 transition flex items-center gap-1">
+                Lihat semua <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </a>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        <th class="py-3.5 px-6">Pelanggan</th>
+                        <th class="py-3.5 px-6">Username</th>
+                        <th class="py-3.5 px-6">Profile</th>
+                        <th class="py-3.5 px-6">Jatuh Tempo</th>
+                        <th class="py-3.5 px-6">Status</th>
+                        <th class="py-3.5 px-6 text-center">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50 text-sm text-gray-700">
+                    {% for c in attention_list %}
+                    <tr class="hover:bg-gray-50/70 transition-colors">
+                        <td class="py-3.5 px-6 font-bold text-gray-900">{{ c.nama_pelanggan }}</td>
+                        <td class="py-3.5 px-6 font-mono text-xs text-gray-600">{{ c.username }}</td>
+                        <td class="py-3.5 px-6 text-gray-600">{{ c.profile_name }}</td>
+                        <td class="py-3.5 px-6 text-gray-700">{{ c.tanggal_jatuh_tempo }}</td>
+                        <td class="py-3.5 px-6">
+                            <span class="px-2 py-0.5 rounded text-xs font-semibold {% if c.status == 'isolated' %}text-red-600 bg-red-50{% else %}text-amber-600 bg-amber-50{% endif %}">
+                                {{ 'Isolir' if c.status == 'isolated' else 'Segera Jatuh Tempo' }}
+                            </span>
+                        </td>
+                        <td class="py-3.5 px-6 text-center">
+                            <button type="button" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg transition-colors shadow-sm inline-flex items-center gap-1.5">
+                                <i data-lucide="check" class="w-3.5 h-3.5"></i> Tandai Lunas
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="py-12 text-center text-gray-400">
+                            <div class="flex flex-col items-center justify-center space-y-2">
+                                <i data-lucide="party-popper" class="w-8 h-8 text-gray-300"></i>
+                                <span class="text-sm">Tidak ada pelanggan yang perlu perhatian saat ini.</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <script>
+        // Data dari backend (Jinja2 dirender jadi JSON murni di sini, sekali saja)
+        const STATS         = {{ stats | tojson }};
+        const CHART_LABELS  = {{ chart_labels | tojson }};
+        const CHART_INCOME  = {{ chart_income | tojson }};
+
+        // Grafik Pemasukan (Bar Chart)
+        const incomeCtx = document.getElementById('incomeChart').getContext('2d');
+        new Chart(incomeCtx, {
+            type: 'bar',
+            data: {
+                labels: CHART_LABELS,
+                datasets: [{
+                    label: 'Pemasukan',
+                    data: CHART_INCOME,
+                    backgroundColor: '#111827',
+                    borderRadius: 6,
+                    maxBarThickness: 36
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: (v) => 'Rp ' + (v / 1000) + 'rb',
+                            font: { size: 11 }
+                        },
+                        grid: { color: '#f3f4f6' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 11 } }
+                    }
+                }
+            }
+        });
+
+        // Grafik Status (Doughnut Chart)
+        const statusCtx = document.getElementById('statusChart').getContext('2d');
+        new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Aktif', 'Isolir / Nunggak'],
+                datasets: [{
+                    data: [STATS.active_customers || 0, STATS.isolated_customers || 0],
+                    backgroundColor: ['#10b981', '#ef4444'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { font: { size: 11 }, padding: 16, boxWidth: 10 }
+                    }
+                },
+                cutout: '70%'
+            }
+        });
+    </script>
+
+{% endblock %}

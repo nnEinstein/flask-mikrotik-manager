@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Riwayat Pembayaran - EINSTEIN{% endblock %}
+{% block content %}
+
+    <div class="mb-6">
+        <h2 class="text-2xl font-bold text-gray-800 mb-1">Riwayat Pembayaran</h2>
+        <p class="text-sm text-gray-500">Daftar seluruh transaksi pembayaran pelanggan PPPoE.</p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center space-x-3">
+            <div class="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                <i data-lucide="receipt" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <span class="text-xs text-gray-400 block font-medium uppercase tracking-wider">Total Transaksi</span>
+                <span class="text-xl font-bold text-gray-900">{{ payments | length | default('0') }} Transaksi</span>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center space-x-3">
+            <div class="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                <i data-lucide="wallet" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <span class="text-xs text-gray-400 block font-medium uppercase tracking-wider">Total Pemasukan</span>
+                <span class="text-xl font-bold text-gray-900">Rp {{ '{:,.0f}'.format(total_income | default(0)).replace(',', '.') }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+
+        <div class="p-4 border-b border-gray-100">
+            <div class="w-full sm:w-72 relative">
+                <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input type="text" id="searchPayment" placeholder="Cari nama pelanggan / username..."
+                       class="w-full bg-gray-50 text-gray-900 placeholder-gray-400 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent py-2 pl-9 pr-3 transition">
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse" id="paymentTable">
+                <thead>
+                    <tr class="bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        <th class="py-3.5 px-6">No</th>
+                        <th class="py-3.5 px-6">Tanggal Bayar</th>
+                        <th class="py-3.5 px-6">Pelanggan</th>
+                        <th class="py-3.5 px-6">Username</th>
+                        <th class="py-3.5 px-6">Profile</th>
+                        <th class="py-3.5 px-6">Periode</th>
+                        <th class="py-3.5 px-6">Jumlah</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50 text-sm text-gray-700">
+                    {% for p in payments %}
+                    <tr class="hover:bg-gray-50/70 transition-colors">
+                        <td class="py-3.5 px-6 font-medium text-gray-400">{{ loop.index }}</td>
+                        <td class="py-3.5 px-6 font-medium text-gray-700">{{ p.tanggal_bayar.strftime('%d %b %Y') }}</td>
+                        <td class="py-3.5 px-6 font-bold text-gray-900">{{ p.customer.nama_pelanggan if p.customer else '-' }}</td>
+                        <td class="py-3.5 px-6 font-mono text-xs text-blue-600 font-semibold">{{ p.customer.username if p.customer else '-' }}</td>
+                        <td class="py-3.5 px-6 text-gray-600">{{ p.customer.profile.nama if p.customer and p.customer.profile else '-' }}</td>
+                        <td class="py-3.5 px-6 text-gray-500">{{ p.periode or '-' }}</td>
+                        <td class="py-3.5 px-6 font-bold text-emerald-600">Rp {{ '{:,.0f}'.format(p.jumlah_bayar).replace(',', '.') }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="py-12 text-center text-gray-400">
+                            <div class="flex flex-col items-center justify-center space-y-2">
+                                <i data-lucide="receipt" class="w-8 h-8 text-gray-300"></i>
+                                <span class="text-sm">Belum ada riwayat pembayaran tercatat.</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('searchPayment').addEventListener('keyup', function() {
+            let filter = this.value.toUpperCase();
+            let rows = document.querySelector("#paymentTable tbody").rows;
+
+            for (let i = 0; i < rows.length; i++) {
+                let nameCol = rows[i].cells[2];
+                let userCol = rows[i].cells[3];
+                if (nameCol && userCol) {
+                    let text = (nameCol.textContent + userCol.textContent).toUpperCase();
+                    rows[i].style.display = text.indexOf(filter) > -1 ? "" : "none";
+                }
+            }
+        });
+    </script>
+
+{% endblock %}

@@ -4,6 +4,10 @@ from dotenv import load_dotenv
 from flask_sqlalchemy import SQLAlchemy
 import routeros_api
 import re
+from datetime import date, timedelta
+from sqlalchemy import func
+from dateutil.relativedelta import relativedelta
+from datetime import date, datetime, timedelta
 
 load_dotenv()
 app = Flask(__name__)
@@ -36,6 +40,43 @@ class WanEntry(db.Model):
     gateway   = db.Column(db.String(50), nullable=False)
     weight    = db.Column(db.Integer, default=1)
     priority  = db.Column(db.Integer, nullable=False)  # urutan failover, 1 = utama
+
+class PPPoEProfile(db.Model):
+    __tablename__ = 'pppoe_profile'
+    id              = db.Column(db.Integer, primary_key=True)
+    router_id       = db.Column(db.Integer, db.ForeignKey('router.id'), nullable=False)
+    nama            = db.Column(db.String(100), nullable=False)
+    rate_limit      = db.Column(db.String(50))
+    harga_bulanan   = db.Column(db.Integer, nullable=False, default=0)
+    local_address   = db.Column(db.String(50))
+    remote_pool     = db.Column(db.String(50))
+
+
+class PPPoECustomer(db.Model):
+    __tablename__ = 'pppoe_customer'
+    id                  = db.Column(db.Integer, primary_key=True)
+    router_id           = db.Column(db.Integer, db.ForeignKey('router.id'), nullable=False)
+    nama_pelanggan      = db.Column(db.String(100), nullable=False)
+    no_hp               = db.Column(db.String(30))
+    alamat              = db.Column(db.String(200))
+    username            = db.Column(db.String(50), nullable=False)
+    password            = db.Column(db.String(100), nullable=False)
+    profile_id          = db.Column(db.Integer, db.ForeignKey('pppoe_profile.id'), nullable=False)
+    tanggal_jatuh_tempo = db.Column(db.Date, nullable=False)
+    status              = db.Column(db.String(20), nullable=False, default='active')
+    tanggal_dibuat       = db.Column(db.Date, nullable=False)
+
+    profile  = db.relationship('PPPoEProfile')
+    payments = db.relationship('PPPoEPayment', backref='customer', cascade='all, delete-orphan')
+
+
+class PPPoEPayment(db.Model):
+    __tablename__ = 'pppoe_payment'
+    id            = db.Column(db.Integer, primary_key=True)
+    customer_id   = db.Column(db.Integer, db.ForeignKey('pppoe_customer.id'), nullable=False)
+    periode       = db.Column(db.String(20))
+    jumlah_bayar  = db.Column(db.Integer, nullable=False)
+    tanggal_bayar = db.Column(db.Date, nullable=False)
 
 with app.app_context():
     db.create_all()
@@ -997,6 +1038,610 @@ def delete_hotspot_active():
             connection.disconnect()
             
     return redirect(url_for('hotspot_active_list'))
+
+# ==========================================
+# PPPoE - DASHBOARD
+# ==========================================
+
+@app.route('/pppoe/dashboard')
+@login_required
+@router_connected_required
+def pppoe_dashboard():
+    router_id = session.get('connected_router_id')
+    today     = date.today()
+
+    customers = PPPoECustomer.query.filter_by(router_id=router_id).all()
+
+    total_customers    = len(customers)
+    active_customers   = sum(1 for c in customers if c.status == 'active')
+    isolated_customers = sum(1 for c in customers if c.status == 'isolated')
+
+    # Pemasukan bulan ini (jumlahkan payment dengan tanggal_bayar di bulan & tahun berjalan)
+    income_this_month = db.session.query(func.sum(PPPoEPayment.jumlah_bayar)).join(PPPoECustomer).filter(
+        PPPoECustomer.router_id == router_id,
+        func.strftime('%Y-%m', PPPoEPayment.tanggal_bayar) == today.strftime('%Y-%m')
+    ).scalar() or 0
+
+    stats = {
+        'total_customers':    total_customers,
+        'active_customers':   active_customers,
+        'isolated_customers': isolated_customers,
+        'income_this_month':  income_this_month
+    }
+
+    # Grafik pemasukan 6 bulan terakhir
+    chart_labels = []
+    chart_income = []
+    bulan_id = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']
+
+    for i in range(5, -1, -1):
+        target_month = today - relativedelta(months=i)
+        ym = target_month.strftime('%Y-%m')
+        total = db.session.query(func.sum(PPPoEPayment.jumlah_bayar)).join(PPPoECustomer).filter(
+            PPPoECustomer.router_id == router_id,
+            func.strftime('%Y-%m', PPPoEPayment.tanggal_bayar) == ym
+        ).scalar() or 0
+        chart_labels.append(bulan_id[target_month.month - 1])
+        chart_income.append(total)
+
+    # Pelanggan yang perlu perhatian: isolir atau jatuh tempo ≤ 3 hari ke depan
+    attention_threshold = today + timedelta(days=3)
+    attention_customers = PPPoECustomer.query.filter(
+        PPPoECustomer.router_id == router_id,
+        db.or_(
+            PPPoECustomer.status == 'isolated',
+            PPPoECustomer.tanggal_jatuh_tempo <= attention_threshold
+        )
+    ).order_by(PPPoECustomer.tanggal_jatuh_tempo.asc()).all()
+
+    attention_list = [{
+        'nama_pelanggan':      c.nama_pelanggan,
+        'username':            c.username,
+        'profile_name':        c.profile.nama if c.profile else '-',
+        'tanggal_jatuh_tempo': c.tanggal_jatuh_tempo.strftime('%d %b %Y'),
+        'status':              c.status
+    } for c in attention_customers]
+
+    return render_template('PPPoE/pppoe_dashboard.html',
+        stats=stats,
+        chart_labels=chart_labels,
+        chart_income=chart_income,
+        attention_list=attention_list
+    )
+
+# ==========================================
+# PPPoE - DAFTAR PELANGGAN
+# ==========================================
+
+@app.route('/pppoe/pelanggan')
+@login_required
+@router_connected_required
+def daftar_pelanggan():
+    router_id = session.get('connected_router_id')
+    customers = PPPoECustomer.query.filter_by(router_id=router_id).order_by(
+        PPPoECustomer.tanggal_jatuh_tempo.asc()
+    ).all()
+
+    return render_template('PPPoE/daftar_pelanggan.html', customers=customers)
+
+
+@app.route('/pppoe/pelanggan/tandai-lunas', methods=['POST'])
+@login_required
+@router_connected_required
+def tandai_lunas():
+    customer_id   = request.form.get('customer_id')
+    jumlah_bayar  = request.form.get('jumlah_bayar')
+    tanggal_bayar = request.form.get('tanggal_bayar')
+
+    if not customer_id or not jumlah_bayar or not tanggal_bayar:
+        flash('Data pembayaran tidak lengkap.', 'danger')
+        return redirect(url_for('daftar_pelanggan'))
+
+    customer = PPPoECustomer.query.get(customer_id)
+    if not customer:
+        flash('Pelanggan tidak ditemukan.', 'danger')
+        return redirect(url_for('daftar_pelanggan'))
+
+    try:
+        tgl_bayar = datetime.strptime(tanggal_bayar, '%Y-%m-%d').date()
+
+        # Simpan riwayat pembayaran
+        payment = PPPoEPayment(
+            customer_id=customer.id,
+            periode=tgl_bayar.strftime('%Y-%m'),
+            jumlah_bayar=int(jumlah_bayar),
+            tanggal_bayar=tgl_bayar
+        )
+        db.session.add(payment)
+
+        # Jatuh tempo baru = tanggal bayar + 1 bulan (sesuai kesepakatan: geser, bukan tetap)
+        customer.tanggal_jatuh_tempo = tgl_bayar + relativedelta(months=1)
+
+        was_isolated = customer.status == 'isolated'
+        customer.status = 'active'
+
+        db.session.commit()
+
+        # Kalau sebelumnya diisolir, kembalikan ke profile normal di MikroTik
+        if was_isolated:
+            api, connection = get_mikrotik_api()
+            if api:
+                try:
+                    secrets = api.get_resource('/ppp/secret').get()
+                    for s in secrets:
+                        if s.get('name') == customer.username:
+                            api.get_resource('/ppp/secret').set(
+                                id=s.get('.id'),
+                                profile=customer.profile.nama,
+                                disabled='no'
+                            )
+                            break
+                except Exception as e:
+                    flash(f'Pembayaran tersimpan, tapi gagal sinkron ke router: {e}', 'danger')
+                finally:
+                    connection.disconnect()
+
+        flash(f'Pembayaran {customer.nama_pelanggan} berhasil dicatat. Jatuh tempo baru: {customer.tanggal_jatuh_tempo.strftime("%d %b %Y")}.', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Gagal mencatat pembayaran: {e}', 'danger')
+
+    return redirect(url_for('daftar_pelanggan'))
+
+
+@app.route('/pppoe/pelanggan/hapus', methods=['POST'])
+@login_required
+@router_connected_required
+def hapus_pelanggan():
+    customer_id = request.form.get('id')
+
+    if not customer_id:
+        flash('ID pelanggan tidak ditemukan.', 'danger')
+        return redirect(url_for('daftar_pelanggan'))
+
+    customer = PPPoECustomer.query.get(customer_id)
+    if not customer:
+        flash('Pelanggan tidak ditemukan.', 'danger')
+        return redirect(url_for('daftar_pelanggan'))
+
+    # Hapus secret PPPoE di MikroTik dulu
+    api, connection = get_mikrotik_api()
+    if api:
+        try:
+            secrets = api.get_resource('/ppp/secret').get()
+            for s in secrets:
+                if s.get('name') == customer.username:
+                    api.get_resource('/ppp/secret').remove(id=s.get('.id'))
+                    break
+        except Exception as e:
+            flash(f'Gagal menghapus akun di router: {e}', 'danger')
+        finally:
+            connection.disconnect()
+
+    try:
+        db.session.delete(customer)  # payments ikut terhapus (cascade)
+        db.session.commit()
+        flash(f'Pelanggan {customer.nama_pelanggan} berhasil dihapus.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Gagal menghapus dari database: {e}', 'danger')
+
+    return redirect(url_for('daftar_pelanggan'))
+
+@app.route('/pppoe/pelanggan/tambah', methods=['GET', 'POST'])
+@login_required
+@router_connected_required
+def tambah_pelanggan():
+    router_id = session.get('connected_router_id')
+
+    if request.method == 'POST':
+        nama_pelanggan = request.form.get('nama_pelanggan')
+        no_hp          = request.form.get('no_hp')
+        alamat         = request.form.get('alamat')
+        username       = request.form.get('username')
+        password       = request.form.get('password')
+        profile_id     = request.form.get('profile_id')
+        jatuh_tempo    = request.form.get('tanggal_jatuh_tempo')
+
+        # Validasi dasar
+        if not all([nama_pelanggan, username, password, profile_id, jatuh_tempo]):
+            flash('Semua field wajib diisi.', 'danger')
+            return redirect(url_for('tambah_pelanggan'))
+
+        # Cek username sudah dipakai pelanggan lain (di database) atau belum
+        existing = PPPoECustomer.query.filter_by(router_id=router_id, username=username).first()
+        if existing:
+            flash(f"Username '{username}' sudah digunakan oleh pelanggan lain. Silakan gunakan username lain.", 'danger')
+            return redirect(url_for('tambah_pelanggan'))
+
+        profile = PPPoEProfile.query.get(profile_id)
+        if not profile:
+            flash('Profile yang dipilih tidak valid.', 'danger')
+            return redirect(url_for('tambah_pelanggan'))
+
+        try:
+            tgl_jatuh_tempo = datetime.strptime(jatuh_tempo, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Format tanggal jatuh tempo tidak valid.', 'danger')
+            return redirect(url_for('tambah_pelanggan'))
+
+        # Push ke MikroTik dulu — kalau gagal, jangan simpan ke DB
+        api, connection = get_mikrotik_api()
+        if not api:
+            flash('Koneksi ke router gagal.', 'danger')
+            return redirect(url_for('tambah_pelanggan'))
+
+        try:
+            # Cek juga di MikroTik, jaga-jaga kalau ada secret manual dengan nama sama
+            existing_secrets = api.get_resource('/ppp/secret').get()
+            if any(s.get('name') == username for s in existing_secrets):
+                flash(f"Username '{username}' sudah terdaftar di router. Gunakan username lain.", 'danger')
+                return redirect(url_for('tambah_pelanggan'))
+
+            api.get_resource('/ppp/secret').add(
+                name=username,
+                password=password,
+                service='pppoe',
+                profile=profile.nama
+            )
+        except Exception as e:
+            flash(f'Gagal membuat akun PPPoE di router: {e}', 'danger')
+            return redirect(url_for('tambah_pelanggan'))
+        finally:
+            connection.disconnect()
+
+        # Baru simpan ke database setelah sukses di MikroTik
+        try:
+            customer = PPPoECustomer(
+                router_id=router_id,
+                nama_pelanggan=nama_pelanggan,
+                no_hp=no_hp,
+                alamat=alamat,
+                username=username,
+                password=password,
+                profile_id=profile.id,
+                tanggal_jatuh_tempo=tgl_jatuh_tempo,
+                status='active',
+                tanggal_dibuat=date.today()
+            )
+            db.session.add(customer)
+            db.session.commit()
+            flash(f"Pelanggan '{nama_pelanggan}' berhasil ditambahkan!", 'success')
+            return redirect(url_for('daftar_pelanggan'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Akun PPPoE sudah dibuat di router, tapi gagal disimpan ke database: {e}', 'danger')
+            return redirect(url_for('tambah_pelanggan'))
+
+    # GET: tampilkan form
+    router_id = session.get('connected_router_id')
+    profiles  = PPPoEProfile.query.filter_by(router_id=router_id).all()
+    return render_template('PPPoE/tambah_pelanggan.html', profiles=profiles)
+
+@app.route('/pppoe/pelanggan/edit/<int:id>', methods=['GET', 'POST'])
+@login_required
+@router_connected_required
+def edit_pelanggan(id):
+    router_id = session.get('connected_router_id')
+    customer  = PPPoECustomer.query.get(id)
+
+    if not customer or customer.router_id != router_id:
+        flash('Pelanggan tidak ditemukan.', 'danger')
+        return redirect(url_for('daftar_pelanggan'))
+
+    if request.method == 'POST':
+        nama_pelanggan = request.form.get('nama_pelanggan')
+        no_hp          = request.form.get('no_hp')
+        alamat         = request.form.get('alamat')
+        username_baru  = request.form.get('username')
+        password_baru  = request.form.get('password')  # boleh kosong
+        profile_id     = request.form.get('profile_id')
+        jatuh_tempo    = request.form.get('tanggal_jatuh_tempo')
+        status_baru    = request.form.get('status')
+
+        if not all([nama_pelanggan, username_baru, profile_id, jatuh_tempo, status_baru]):
+            flash('Semua field wajib diisi.', 'danger')
+            return redirect(url_for('edit_pelanggan', id=id))
+
+        profile = PPPoEProfile.query.get(profile_id)
+        if not profile:
+            flash('Profile yang dipilih tidak valid.', 'danger')
+            return redirect(url_for('edit_pelanggan', id=id))
+
+        # Cek username baru tidak bentrok dengan pelanggan lain (kecuali dirinya sendiri)
+        if username_baru != customer.username:
+            bentrok = PPPoECustomer.query.filter(
+                PPPoECustomer.router_id == router_id,
+                PPPoECustomer.username == username_baru,
+                PPPoECustomer.id != customer.id
+            ).first()
+            if bentrok:
+                flash(f"Username '{username_baru}' sudah digunakan pelanggan lain.", 'danger')
+                return redirect(url_for('edit_pelanggan', id=id))
+
+        try:
+            tgl_jatuh_tempo = datetime.strptime(jatuh_tempo, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Format tanggal jatuh tempo tidak valid.', 'danger')
+            return redirect(url_for('edit_pelanggan', id=id))
+
+        # Sync ke MikroTik dulu — cari secret berdasarkan username LAMA
+        api, connection = get_mikrotik_api()
+        if not api:
+            flash('Koneksi ke router gagal.', 'danger')
+            return redirect(url_for('edit_pelanggan', id=id))
+
+        try:
+            secrets = api.get_resource('/ppp/secret').get()
+            mikrotik_id = None
+            for s in secrets:
+                if s.get('name') == customer.username:
+                    mikrotik_id = s.get('.id')
+                    break
+
+            if not mikrotik_id:
+                flash(f"Akun PPPoE '{customer.username}' tidak ditemukan di router. Mungkin sudah dihapus manual.", 'danger')
+                return redirect(url_for('edit_pelanggan', id=id))
+
+            update_data = {
+                '.id':     mikrotik_id,
+                'name':    username_baru,
+                'profile': profile.nama,
+                'disabled': 'yes' if status_baru == 'isolated' else 'no'
+            }
+            if password_baru:
+                update_data['password'] = password_baru
+
+            api.get_resource('/ppp/secret').set(**update_data)
+
+        except Exception as e:
+            flash(f'Gagal memperbarui akun di router: {e}', 'danger')
+            return redirect(url_for('edit_pelanggan', id=id))
+        finally:
+            connection.disconnect()
+
+        # Baru update database
+        try:
+            customer.nama_pelanggan      = nama_pelanggan
+            customer.no_hp               = no_hp
+            customer.alamat              = alamat
+            customer.username            = username_baru
+            if password_baru:
+                customer.password = password_baru
+            customer.profile_id          = profile.id
+            customer.tanggal_jatuh_tempo = tgl_jatuh_tempo
+            customer.status              = status_baru
+
+            db.session.commit()
+            flash(f"Pelanggan '{nama_pelanggan}' berhasil diperbarui!", 'success')
+            return redirect(url_for('daftar_pelanggan'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Akun sudah diperbarui di router, tapi gagal disimpan ke database: {e}', 'danger')
+            return redirect(url_for('edit_pelanggan', id=id))
+
+    # GET: tampilkan form
+    profiles = PPPoEProfile.query.all()
+    return render_template('PPPoE/edit_pelanggan.html', customer=customer, profiles=profiles)
+
+# ==========================================
+# PPPoE - PROFILE
+# ==========================================
+
+@app.route('/pppoe/profile')
+@login_required
+@router_connected_required
+def pppoe_profile_list():
+    router_id = session.get('connected_router_id')
+    profiles = PPPoEProfile.query.filter_by(router_id=router_id).all()
+    return render_template('PPPoE/pppoe_profile_list.html', profiles=profiles)
+
+
+@app.route('/pppoe/profile/tambah', methods=['GET', 'POST'])
+@login_required
+@router_connected_required
+def tambah_pppoe_profile():
+    router_id = session.get('connected_router_id')
+
+    if request.method == 'POST':
+        nama          = request.form.get('nama')
+        rate_limit    = request.form.get('rate_limit')
+        harga_bulanan = request.form.get('harga_bulanan')
+        local_address = request.form.get('local_address')
+        remote_pool   = request.form.get('remote_pool')
+
+        if not nama or not harga_bulanan:
+            flash('Nama profile dan harga bulanan wajib diisi.', 'danger')
+            return redirect(url_for('tambah_pppoe_profile'))
+
+        # Push ke MikroTik dulu — kalau gagal, jangan simpan ke database
+        api, connection = get_mikrotik_api()
+        if not api:
+            flash('Koneksi ke router gagal.', 'danger')
+            return redirect(url_for('tambah_pppoe_profile'))
+
+        try:
+            profile_data = {'name': nama}
+            if rate_limit:
+                profile_data['rate-limit'] = rate_limit
+            if local_address:
+                profile_data['local-address'] = local_address
+            if remote_pool:
+                profile_data['remote-address'] = remote_pool
+
+            api.get_resource('/ppp/profile').add(**profile_data)
+        except Exception as e:
+            flash(f'Gagal membuat profile di router: {e}', 'danger')
+            return redirect(url_for('tambah_pppoe_profile'))
+        finally:
+            connection.disconnect()
+
+        # Baru simpan ke database setelah sukses di MikroTik
+        try:
+            profile = PPPoEProfile(
+                router_id=router_id,
+                nama=nama,
+                rate_limit=rate_limit or None,
+                harga_bulanan=int(harga_bulanan),
+                local_address=local_address or None,
+                remote_pool=remote_pool or None
+            )
+            db.session.add(profile)
+            db.session.commit()
+            flash(f"Profile '{nama}' berhasil ditambahkan!", 'success')
+            return redirect(url_for('pppoe_profile_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Profile sudah dibuat di router, tapi gagal disimpan ke database: {e}', 'danger')
+            return redirect(url_for('tambah_pppoe_profile'))
+
+    # GET: ambil ip_addresses & pools dari MikroTik untuk dropdown
+    ip_addresses = []
+    pools        = []
+    api, connection = get_mikrotik_api()
+    if api:
+        try:
+            ip_addresses = api.get_resource('/ip/address').get()
+            pools        = api.get_resource('/ip/pool').get()
+        except Exception as e:
+            flash(f'Gagal memuat data router: {e}', 'danger')
+        finally:
+            connection.disconnect()
+
+    return render_template('PPPoE/tambah_pppoe_profile.html', ip_addresses=ip_addresses, pools=pools)
+
+
+@app.route('/pppoe/profile/edit/<int:id>', methods=['GET', 'POST'])
+@login_required
+@router_connected_required
+def edit_pppoe_profile(id):
+    router_id = session.get('connected_router_id')
+    profile   = PPPoEProfile.query.filter_by(id=id, router_id=router_id).first()
+
+    if not profile:
+        flash('Profile tidak ditemukan.', 'danger')
+        return redirect(url_for('pppoe_profile_list'))
+
+    if request.method == 'POST':
+        nama          = request.form.get('nama')
+        rate_limit    = request.form.get('rate_limit')
+        harga_bulanan = request.form.get('harga_bulanan')
+        local_address = request.form.get('local_address')
+        remote_pool   = request.form.get('remote_pool')
+
+        if not nama or not harga_bulanan:
+            flash('Nama profile dan harga bulanan wajib diisi.', 'danger')
+            return redirect(url_for('edit_pppoe_profile', id=id))
+
+        # Push perubahan ke MikroTik dulu — cari profile lama berdasarkan nama LAMA
+        api, connection = get_mikrotik_api()
+        if not api:
+            flash('Koneksi ke router gagal.', 'danger')
+            return redirect(url_for('edit_pppoe_profile', id=id))
+
+        try:
+            existing_profiles = api.get_resource('/ppp/profile').get()
+            mikrotik_id = None
+            for mp in existing_profiles:
+                if mp.get('name') == profile.nama:
+                    mikrotik_id = mp.get('.id')
+                    break
+
+            if not mikrotik_id:
+                flash(f"Profile '{profile.nama}' tidak ditemukan di router. Mungkin sudah dihapus manual, sehingga tidak bisa diperbarui.", 'danger')
+                return redirect(url_for('edit_pppoe_profile', id=id))
+
+            update_data = {'.id': mikrotik_id, 'name': nama}
+            update_data['rate-limit']     = rate_limit   if rate_limit   else ''
+            update_data['local-address']  = local_address if local_address else ''
+            update_data['remote-address'] = remote_pool   if remote_pool   else ''
+
+            api.get_resource('/ppp/profile').set(**update_data)
+
+        except Exception as e:
+            flash(f'Gagal memperbarui profile di router: {e}', 'danger')
+            return redirect(url_for('edit_pppoe_profile', id=id))
+        finally:
+            connection.disconnect()
+
+        # Baru update database setelah sukses di MikroTik
+        try:
+            profile.nama          = nama
+            profile.rate_limit    = rate_limit or None
+            profile.harga_bulanan = int(harga_bulanan)
+            profile.local_address = local_address or None
+            profile.remote_pool   = remote_pool or None
+            db.session.commit()
+            flash(f"Profile '{nama}' berhasil diperbarui!", 'success')
+            return redirect(url_for('pppoe_profile_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Profile sudah diperbarui di router, tapi gagal disimpan ke database: {e}', 'danger')
+            return redirect(url_for('edit_pppoe_profile', id=id))
+
+    # ── GET: tampilkan form edit ────────────────────────────────────
+    ip_addresses = []
+    pools        = []
+    api, connection = get_mikrotik_api()
+    if api:
+        try:
+            ip_addresses = api.get_resource('/ip/address').get()
+            pools        = api.get_resource('/ip/pool').get()
+        except Exception as e:
+            flash(f'Gagal memuat data router: {e}', 'danger')
+        finally:
+            connection.disconnect()
+
+    return render_template('PPPoE/edit_pppoe_profile.html', profile=profile, ip_addresses=ip_addresses, pools=pools)
+
+
+@app.route('/pppoe/profile/hapus', methods=['POST'])
+@login_required
+@router_connected_required
+def hapus_pppoe_profile():
+    router_id  = session.get('connected_router_id')
+    profile_id = request.form.get('id')
+
+    if not profile_id:
+        flash('ID profile tidak ditemukan.', 'danger')
+        return redirect(url_for('pppoe_profile_list'))
+
+    profile = PPPoEProfile.query.filter_by(id=profile_id, router_id=router_id).first()
+    if not profile:
+        flash('Profile tidak ditemukan.', 'danger')
+        return redirect(url_for('pppoe_profile_list'))
+
+    pelanggan_pakai = PPPoECustomer.query.filter_by(profile_id=profile.id).count()
+    if pelanggan_pakai > 0:
+        flash(f"Profile '{profile.nama}' tidak bisa dihapus karena masih digunakan oleh {pelanggan_pakai} pelanggan.", 'danger')
+        return redirect(url_for('pppoe_profile_list'))
+
+    # Hapus dari MikroTik dulu
+    api, connection = get_mikrotik_api()
+    if api:
+        try:
+            existing_profiles = api.get_resource('/ppp/profile').get()
+            for mp in existing_profiles:
+                if mp.get('name') == profile.nama:
+                    api.get_resource('/ppp/profile').remove(id=mp.get('.id'))
+                    break
+        except Exception as e:
+            flash(f'Gagal menghapus profile di router: {e}', 'danger')
+        finally:
+            connection.disconnect()
+
+    try:
+        db.session.delete(profile)
+        db.session.commit()
+        flash(f"Profile '{profile.nama}' berhasil dihapus.", 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Gagal menghapus profile dari database: {e}', 'danger')
+
+    return redirect(url_for('pppoe_profile_list'))
 
 # ==========================================
 # UJI KONEKSI

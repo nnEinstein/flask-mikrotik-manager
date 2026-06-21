@@ -91,6 +91,23 @@
                             <a href="{{ url_for('hotspot_active_list') }}" class="block px-4 py-2 text-xs font-semibold text-white rounded-lg hover:bg-gray-700 transition">Hotspot active</a>
                         </div>
                     </div>
+                    <div class="space-y-1">
+                        <button type="button" onclick="togglePppoeMenu()" class="w-full flex items-center justify-between px-4 py-3 text-sm  bg-gray-800 font-medium text-white hover:bg-gray-700 rounded-xl transition duration-200 group focus:outline-none">
+                            <div class="flex items-center space-x-3">
+                                <i data-lucide="cable" class="w-5 h-5 text-gray-400"></i>
+                                <span>PPPoE</span>
+                            </div>
+                            <i id="pppoeArrow" data-lucide="chevron-down" class="w-4 h-4 text-gray-400 transition-transform duration-200"></i>
+                        </button>
+
+                        <div id="pppoeSubMenu" class="hidden pl-11 pr-2 space-y-1 transition-all duration-300">
+                            <a href="{{ url_for('pppoe_dashboard') }}" class="block px-4 py-2 text-xs font-semibold text-white rounded-lg hover:bg-gray-700 transition">Dashboard</a>
+                            <a href="{{ url_for('daftar_pelanggan') }}" class="block px-4 py-2 text-xs font-semibold text-white rounded-lg hover:bg-gray-700 transition">Daftar pelanggan</a>
+                            <a href="{{ url_for('tambah_pelanggan') }}" class="block px-4 py-2 text-xs font-semibold text-white rounded-lg hover:bg-gray-700 transition">Tambah pelanggan</a>
+                            <a href="{{ url_for('pppoe_profile_list') }}" class="block px-4 py-2 text-xs font-semibold text-white rounded-lg hover:bg-gray-700 transition">Profile</a>
+                            <a href="#" class="block px-4 py-2 text-xs font-semibold text-white rounded-lg hover:bg-gray-700 transition">Riwayat pembayaran</a>
+                        </div>
+                    </div>
                     <li>
                         <a href="{{ url_for('uji_koneksi') }}" class="flex items-center px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors font-medium text-white">
                             <i data-lucide="plug-zap" class="w-5 h-5 mr-3 text-gray-400"></i> Uji Koneksi
@@ -135,6 +152,13 @@
         const sidebar = document.getElementById('sidebar');
         const toggleBtn = document.getElementById('sidebarToggle');
         const overlay = document.getElementById('sidebarOverlay');
+
+        function togglePppoeMenu() {
+            const submenu = document.getElementById('pppoeSubMenu');
+            const arrow   = document.getElementById('pppoeArrow');
+            submenu.classList.toggle('hidden');
+            arrow.classList.toggle('rotate-180');
+}
 
         function toggleSidebar() {
             sidebar.classList.toggle('-translate-x-full');
