@@ -1682,6 +1682,110 @@ def riwayat_pembayaran():
     return render_template('PPPoE/riwayat_pembayaran.html', payments=payments, total_income=total_income)
 
 # ==========================================
+# PPPoE - POOL
+# ==========================================
+
+@app.route('/pppoe/pool')
+@login_required
+@router_connected_required
+def pppoe_pool():
+    pools = []
+    api, connection = get_mikrotik_api()
+    if api:
+        try:
+            pools = list(api.get_resource('/ip/pool').get())
+        except Exception as e:
+            flash(f'Gagal memuat data pool: {e}', 'danger')
+        finally:
+            connection.disconnect()
+    return render_template('PPPoE/pppoe_pool.html', pools=pools)
+
+
+@app.route('/pppoe/pool/tambah', methods=['POST'])
+@login_required
+@router_connected_required
+def tambah_pppoe_pool():
+    nama   = request.form.get('nama')
+    ranges = request.form.get('ranges')
+
+    if not nama or not ranges:
+        flash('Nama pool dan range IP wajib diisi.', 'danger')
+        return redirect(url_for('pppoe_pool'))
+
+    api, connection = get_mikrotik_api()
+    if not api:
+        flash('Koneksi ke router gagal.', 'danger')
+        return redirect(url_for('pppoe_pool'))
+
+    try:
+        api.get_resource('/ip/pool').add(name=nama, ranges=ranges)
+        flash(f"Pool '{nama}' berhasil ditambahkan!", 'success')
+    except Exception as e:
+        flash(f'Gagal menambahkan pool: {e}', 'danger')
+    finally:
+        connection.disconnect()
+
+    return redirect(url_for('pppoe_pool'))
+
+
+@app.route('/pppoe/pool/edit', methods=['POST'])
+@login_required
+@router_connected_required
+def edit_pppoe_pool():
+    pool_id = request.form.get('id')
+    nama    = request.form.get('nama')
+    ranges  = request.form.get('ranges')
+
+    if not pool_id or not nama or not ranges:
+        flash('Data pool tidak lengkap.', 'danger')
+        return redirect(url_for('pppoe_pool'))
+
+    api, connection = get_mikrotik_api()
+    if not api:
+        flash('Koneksi ke router gagal.', 'danger')
+        return redirect(url_for('pppoe_pool'))
+
+    try:
+        api.get_resource('/ip/pool').set(**{
+            '.id':    pool_id,
+            'name':   nama,
+            'ranges': ranges
+        })
+        flash(f"Pool '{nama}' berhasil diperbarui!", 'success')
+    except Exception as e:
+        flash(f'Gagal memperbarui pool: {e}', 'danger')
+    finally:
+        connection.disconnect()
+
+    return redirect(url_for('pppoe_pool'))
+
+
+@app.route('/pppoe/pool/hapus', methods=['POST'])
+@login_required
+@router_connected_required
+def hapus_pppoe_pool():
+    pool_id = request.form.get('id')
+
+    if not pool_id:
+        flash('ID pool tidak ditemukan.', 'danger')
+        return redirect(url_for('pppoe_pool'))
+
+    api, connection = get_mikrotik_api()
+    if not api:
+        flash('Koneksi ke router gagal.', 'danger')
+        return redirect(url_for('pppoe_pool'))
+
+    try:
+        api.get_resource('/ip/pool').remove(id=pool_id)
+        flash('Pool berhasil dihapus.', 'success')
+    except Exception as e:
+        flash(f'Gagal menghapus pool: {e}', 'danger')
+    finally:
+        connection.disconnect()
+
+    return redirect(url_for('pppoe_pool'))
+
+# ==========================================
 # UJI KONEKSI
 # ==========================================
 
