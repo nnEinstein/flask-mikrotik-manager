@@ -43,13 +43,9 @@
 
                     <div>
                         <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Local Address</label>
-                        <select name="local_address" class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition cursor-pointer">
-                            <option value="">-- Tidak diatur --</option>
-                            {% for ip in ip_addresses %}
-                            <option value="{{ ip.address.split('/')[0] }}">{{ ip.address }} ({{ ip.interface }})</option>
-                            {% endfor %}
-                        </select>
-                        <p class="text-xs text-gray-400 mt-1.5">IP gateway sisi router untuk koneksi PPPoE ini.</p>
+                        <input type="text" name="local_address" placeholder="Contoh: 192.168.100.1"
+                            class="w-full bg-gray-50 text-gray-900 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white py-2.5 px-3 transition">
+                        <p class="text-xs text-gray-400 mt-1.5">IP gateway sisi router untuk koneksi PPPoE ini. Kosongkan jika pakai default.</p>
                     </div>
 
                     <div>

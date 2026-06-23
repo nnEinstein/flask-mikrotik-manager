@@ -1508,7 +1508,6 @@ def tambah_pppoe_profile():
     api, connection = get_mikrotik_api()
     if api:
         try:
-            ip_addresses = api.get_resource('/ip/address').get()
             pools        = api.get_resource('/ip/pool').get()
         except Exception as e:
             flash(f'Gagal memuat data router: {e}', 'danger')
@@ -1600,7 +1599,6 @@ def edit_pppoe_profile(id):
     api, connection = get_mikrotik_api()
     if api:
         try:
-            ip_addresses = api.get_resource('/ip/address').get()
             pools        = api.get_resource('/ip/pool').get()
         except Exception as e:
             flash(f'Gagal memuat data router: {e}', 'danger')
